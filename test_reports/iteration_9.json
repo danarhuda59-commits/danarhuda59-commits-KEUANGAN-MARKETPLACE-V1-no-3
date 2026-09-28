@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 9: validated low-stock alerts (list + daily snapshot + cron webhook) and marketplace return reasons (order form/detail/import/report). Backend pytest: 14/14 passed on public URL — alerts shape, daily snapshot idempotency (history length unchanged after 2nd call same day), critical vs low classification for newly created product+material, cron 401 (no auth / wrong token), cron 200 with correct Bearer WEBHOOK_CRON_SECRET, duplicate X-Webhook-Id returns duplicate:true, refund_reason explicit ('Rusak'), free-text normalization ('barang salah kirim' → 'Salah kirim'), default to 'Lainnya' when status Refund without reason, '' for normal Selesai order, /marketplace/reports/returns summary+rows+detail (detail only contains return orders), /marketplace/meta.refund_reasons list, import validate/commit stores normalized reason, regression on sales/products/channels reports + /api/dashboard. Frontend: banner low-stock-banner visible with count '4 item', link navigates to /#ringkasan-stok and shows stock-daily-summary + stock-daily-count + stock-daily-new; dismiss hides banner and persists via localStorage stockBannerDismissed='2026-09-28', banner returns after clearing key; on /marketplace/order Order Manual initially hides order-refund-reason, setting order-refund-qty=1 reveals it; /marketplace/laporan/returns shows mp-returns-kpis, mp-returns-top-reason, mp-report-table, mp-returns-detail, tab 'Alasan Retur' present in mp-report-tabs; order detail modal shows badge order-detail-refund-reason ('Alasan: Rusak').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard mobile (390x844)", "issues": ["document.scrollWidth > clientWidth on dashboard when banner + Ringkasan Harian card render — minor horizontal overflow. Content itself fits inside the card but page-level horizontal scroll is present. Consider reviewing grid-cols-4 on stock-daily-summary at <sm breakpoint; currently it uses grid-cols-2 sm:grid-cols-4 which is fine, so overflow likely comes from another wide element (table-wrap chart). Non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9_alerts_returns.py",
+    "/app/test_reports/pytest/iteration9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "operations.py cron_stock_daily: idempotency key is stored without TTL — cron_runs collection grows unbounded over time. Consider adding a TTL index on created_at or scoping by (job, run_id).",
+    "operations.py stock_alerts_daily always calls snapshot_stock_daily(force=True); with cron scheduled 07:00 WIB this is fine but every dashboard visit triggers a full snapshot recomputation — could be optimized to reuse today's snapshot unless data is stale.",
+    "marketplace.py normalize_reason falls back to 'Lainnya' for any non-empty free text that doesn't hit keywords — this loses the original wording. Consider persisting refund_reason_note alongside the normalized enum for audit."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration9_alerts_returns.py",
+    "/app/test_reports/iteration_9.json",
+    "/app/test_reports/pytest/iteration9.xml"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (all required data-testids resolved and behavior matches spec)"},
+  "test_credentials": "admin@keuangan.com / Admin12345!",
+  "seed_data_creation": "TEST_IT9_Prod_<suffix> (min 5, stock 0, critical), TEST_IT9_Mat_<suffix> (100/500 gram, low), several TEST_IT9_<hex> marketplace orders (Selesai/Dikembalikan/Refund with various refund reasons), one TEST_IT9_IMP_<hex> imported order with refund_reason='Rusak'. Cron ran once producing today's stock_alert_daily snapshot for admin business.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "stock-daily-history renders only when history.length > 1 (currently 1 snapshot exists so it isn't shown); stock-daily-resolved renders only if there are items that dropped out of low-stock since previous snapshot. Both are conditional and not bugs. Banner localStorage key uses today's ISO date string as value; dismiss is per-day.",
+  "rca of the issue": "N/A — all iteration 9 features working as specified."
+}
