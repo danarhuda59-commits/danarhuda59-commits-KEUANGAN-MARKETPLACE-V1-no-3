@@ -13,7 +13,7 @@ const IMPORT_TYPES = [{ value: "materials", label: "Bahan Baku" }, { value: "pro
 
 function Profile() {
   const { business, refresh } = useAuth();
-  const [f, setF] = useState({ name: business?.name || "", address: business?.address || "", phone: business?.phone || "", email: business?.email || "", target_margin: business?.target_margin ?? 30, notes: business?.notes || "" });
+  const [f, setF] = useState({ name: business?.name || "", address: business?.address || "", phone: business?.phone || "", email: business?.email || "", target_margin: business?.target_margin ?? 30, include_marketplace_in_pl: !!business?.include_marketplace_in_pl, notes: business?.notes || "" });
   const [pw, setPw] = useState({ old_password: "", new_password: "" });
   const save = async () => { try { await api.put("/business", { ...f, target_margin: parseFloat(f.target_margin || 0) }); toast.success("Profil usaha tersimpan"); refresh(); } catch (e) { toast.error(errMsg(e)); } };
   const changePw = async () => { try { await api.post("/auth/change-password", pw); toast.success("Password diubah"); setPw({ old_password: "", new_password: "" }); } catch (e) { toast.error(errMsg(e)); } };
@@ -26,6 +26,7 @@ function Profile() {
         <Field label="Email"><TextInput value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
         <Field label="Target margin default (%)"><NumberInput value={f.target_margin} onChange={(v) => setF({ ...f, target_margin: v })} /></Field>
         <Field label="Alamat" className="sm:col-span-2"><TextArea value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></Field>
+        <label className="sm:col-span-2 flex items-start gap-2 text-sm cursor-pointer"><input type="checkbox" className="mt-1" checked={f.include_marketplace_in_pl} onChange={(e) => setF({ ...f, include_marketplace_in_pl: e.target.checked })} data-testid="business-include-marketplace-checkbox" /><span>Sertakan order marketplace dalam Laba Rugi & Dashboard utama<span className="block text-xs text-muted-foreground">Order marketplace (selain Pending/Dibatalkan) dihitung sebagai penjualan: omzet bersih, HPP + packaging, biaya marketplace & iklan.</span></span></label>
         <div className="sm:col-span-2"><Button onClick={save} data-testid="business-save-btn">Simpan Profil</Button></div>
       </div>
       <div className="card-panel space-y-4">

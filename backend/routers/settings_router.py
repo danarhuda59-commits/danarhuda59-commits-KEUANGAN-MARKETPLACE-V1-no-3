@@ -28,6 +28,7 @@ class BusinessIn(BaseModel):
     email: Optional[str] = ""
     logo_url: Optional[str] = ""
     target_margin: float = 30
+    include_marketplace_in_pl: bool = False
     notes: Optional[str] = ""
 
 

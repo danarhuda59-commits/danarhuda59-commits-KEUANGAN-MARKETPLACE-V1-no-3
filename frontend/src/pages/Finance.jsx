@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, ArrowLeftRight } from "lucide-react";
+import { Plus, Trash2, ArrowLeftRight, Store } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LineChart, Line } from "recharts";
 import { api, errMsg } from "../lib/api";
 import { useApi, qs } from "../lib/hooks";
+import { useAuth } from "../lib/auth";
 import { formatRp, formatNum, formatPct, formatDate, todayISO } from "../lib/format";
 import { PageHeader, DataTable, Modal, Field, TextInput, NumberInput, SelectInput, SummaryRow, PeriodFilter, usePeriod, StatCard, ExportButtons } from "../components/common";
 import { Button } from "../components/ui/button";
+import { Switch } from "../components/ui/switch";
 
 const ACC_TYPES = [{ value: "cash", label: "Kas" }, { value: "bank", label: "Bank" }, { value: "ewallet", label: "E-Wallet" }, { value: "marketplace", label: "Saldo Marketplace" }];
 const CAT = { sale: "Penjualan", purchase: "Pembelian", expense: "Pengeluaran", transfer: "Transfer", capital: "Modal", other: "Lainnya", opening: "Saldo awal" };
@@ -71,12 +73,25 @@ export function Cash() {
 
 export function ProfitLoss() {
   const period = usePeriod("month");
-  const { data: d } = useApi(`/reports/profit-loss${qs(period.range)}`, [period.range.start, period.range.end]);
+  const { business, refresh } = useAuth();
+  const { data: d, reload } = useApi(`/reports/profit-loss${qs(period.range)}`, [period.range.start, period.range.end]);
   const s = d?.summary || {};
+  const included = d?.marketplace_included ?? !!business?.include_marketplace_in_pl;
+  const toggleMp = async (v) => {
+    try { await api.put("/business", { ...business, include_marketplace_in_pl: v }); toast.success(v ? "Order marketplace disertakan dalam Laba Rugi" : "Order marketplace dikeluarkan dari Laba Rugi"); await refresh(); reload(); } catch (e) { toast.error(errMsg(e)); }
+  };
+  const mp = d?.marketplace_summary;
   const prodCols = [{ key: "product_name", label: "Produk" }, { key: "qty", label: "Qty Terjual", align: "right", render: (r) => formatNum(r.qty) }, { key: "avg_price", label: "Harga Jual Rata2", align: "right", render: (r) => formatRp(r.avg_price) }, { key: "hpp_per_unit", label: "HPP/Unit", align: "right", render: (r) => formatRp(r.hpp_per_unit, true) }, { key: "omzet", label: "Omzet", align: "right", render: (r) => formatRp(r.omzet) }, { key: "hpp", label: "HPP", align: "right", render: (r) => formatRp(r.hpp) }, { key: "profit", label: "Laba", align: "right", render: (r) => formatRp(r.profit) }, { key: "margin_pct", label: "Margin", align: "right", render: (r) => formatPct(r.margin_pct) }];
   return (
     <div data-testid="pl-page">
       <PageHeader title="Laporan Laba Rugi" subtitle="Penjualan − HPP = Laba Kotor; Laba Kotor − Beban Operasional = Laba Bersih" actions={<PeriodFilter period={period} />} />
+      <div className="card-panel mb-6 flex flex-wrap items-center justify-between gap-3" data-testid="pl-marketplace-toggle-panel">
+        <div className="flex items-center gap-2"><Store className="h-4 w-4 text-primary" /><div><p className="text-sm font-semibold">Sertakan order marketplace</p><p className="text-xs text-muted-foreground">Order Shopee/TikTok/Tokopedia/Website (status selain Pending & Dibatalkan) ikut dihitung: omzet bersih, HPP + packaging, biaya marketplace, iklan.</p></div></div>
+        <div className="flex items-center gap-3">
+          {included && mp && <span className="text-xs text-muted-foreground" data-testid="pl-marketplace-summary">{mp.transactions} order · omzet {formatRp(mp.omzet)} · laba {formatRp(mp.gross_profit)}</span>}
+          <Switch checked={included} onCheckedChange={toggleMp} data-testid="pl-marketplace-switch" />
+        </div>
+      </div>
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
         <div className="card-panel" data-testid="pl-statement">
           <h3 className="mb-3 font-heading font-semibold">Ikhtisar</h3>

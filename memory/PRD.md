@@ -18,6 +18,8 @@ Pemilik/operator UMKM F&B: HPP dari bahan & resep, pembelian/produksi/penjualan,
 - [x] Clone → rsync ke `/app` (tanpa mengubah kode fitur), `pip install -r requirements.txt`, `yarn install` (yarn.lock dibuat)
 - [x] `backend/.env`: tambah `JWT_SECRET`, `ADMIN_EMAIL=admin@keuangan.com`, `ADMIN_PASSWORD` (lihat `memory/test_credentials.md`); admin ter-seed saat startup
 - [x] Verifikasi: `/api/health` ok, login UI → dashboard, 16 unit test HPP lulus, testing agent iterasi 7: 22/22 backend + 5 halaman frontend lulus (auth, master, HPP, pembelian/produksi/penjualan, finance, marketplace penuh)
+- [x] Hapus data uji: `backend/scripts/cleanup_test_data.py` (hapus bisnis/user TEST + transaksi di bisnis admin; master default & admin tetap) — DB bersih
+- [x] Sinkron Laba Rugi: flag `businesses.include_marketplace_in_pl` (default false) via `PUT /business`; `finance.period_data` menyertakan `sales_orders` (status selain Pending/Dibatalkan) sebagai penjualan → Laba Rugi, Dashboard, laporan penjualan/channel/produk. Rumus: omzet = net_revenue, HPP = hpp_total + packaging, biaya = fee marketplace + iklan + ops → laba bersih identik dengan modul marketplace. UI: Switch di halaman Laba Rugi (`pl-marketplace-switch`) + checkbox di Pengaturan > Profil.
 - [ ] S3 upload tidak dikonfigurasi (opsional) → `POST /upload` 503
 
 ## Yang sudah dikerjakan (Juni 2026 — re-import)

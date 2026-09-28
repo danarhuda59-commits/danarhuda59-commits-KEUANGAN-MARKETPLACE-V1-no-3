@@ -116,9 +116,35 @@ async def delete_cash_tx(tid: str, user=Depends(current_user)):
 
 
 # ---------- Aggregations ----------
+MP_EXCLUDED_STATUSES = ["Pending", "Dibatalkan"]
+
+
+def order_as_sale(o):
+    """Konversi order marketplace ke bentuk 'sale' agar bisa diagregasi oleh pl_summary/per_product/per_channel. Packaging dihitung sebagai bagian HPP."""
+    hpp = float(o.get("hpp_total") or 0) + float(o.get("packaging_cost") or 0)
+    pf, sf, of = float(o.get("marketplace_fee_total") or 0), float(o.get("ad_fee") or 0), float(o.get("other_operational_fee") or 0)
+    total = float(o.get("net_revenue") or 0)
+    net = total - pf - sf - of
+    return {"id": o["id"], "number": o.get("order_id"), "date": o["date"], "channel": o["channel"], "source": "marketplace", "status": o.get("status"),
+            "total": round(total, 2), "platform_fee": pf, "service_fee": sf, "other_fee": of, "net_total": round(net, 2), "total_hpp": round(hpp, 2), "profit": round(net - hpp, 2), "qty_total": float(o.get("qty") or 0),
+            "items": [{"product_id": o["product_id"], "product_name": o["product_name"], "sku": o.get("sku"), "qty": float(o.get("qty") or 0), "price": o.get("selling_price"), "subtotal": round(total, 2), "hpp_total": round(hpp, 2), "profit": round(total - hpp, 2)}]}
+
+
+async def marketplace_included(bid):
+    biz = await db.businesses.find_one({"id": bid}, {"_id": 0, "include_marketplace_in_pl": 1})
+    return bool((biz or {}).get("include_marketplace_in_pl"))
+
+
+async def marketplace_sales(bid, dr):
+    orders = await db.sales_orders.find(Q(bid, date=dr, status={"$nin": MP_EXCLUDED_STATUSES}), {"_id": 0}).to_list(50000)
+    return [order_as_sale(o) for o in orders]
+
+
 async def period_data(bid, start, end):
     dr = date_range(start, end)
     sales = await db.sales.find(Q(bid, date=dr), {"_id": 0}).to_list(50000)
+    if await marketplace_included(bid):
+        sales += await marketplace_sales(bid, dr)
     expenses = await db.expenses.find(Q(bid, date=dr), {"_id": 0}).to_list(50000)
     purchases = await db.purchases.find(Q(bid, date=dr), {"_id": 0}).to_list(50000)
     return sales, expenses, purchases
@@ -259,12 +285,16 @@ async def material_cost_trend(user=Depends(current_user)):
 
 @router.get("/reports/profit-loss")
 async def report_pl(user=Depends(current_user), start: str = "", end: str = ""):
-    sales, expenses, purchases = await period_data(user["business_id"], start, end)
+    bid = user["business_id"]
+    sales, expenses, purchases = await period_data(bid, start, end)
     by_cat = defaultdict(float)
     for e in expenses:
         by_cat[e["category"]] += e["amount"]
+    included = await marketplace_included(bid)
+    mp = [s for s in sales if s.get("source") == "marketplace"]
     return {"summary": pl_summary(sales, expenses), "expenses_by_category": [{"category": k, "amount": round(v, 2)} for k, v in sorted(by_cat.items(), key=lambda x: -x[1])],
-            "by_product": per_product(sales), "by_channel": per_channel(sales), "daily": daily_series(sales, expenses, purchases, start, end)}
+            "by_product": per_product(sales), "by_channel": per_channel(sales), "daily": daily_series(sales, expenses, purchases, start, end),
+            "marketplace_included": included, "marketplace_summary": pl_summary(mp, []) if included else None}
 
 
 @router.get("/reports/cash-flow")
