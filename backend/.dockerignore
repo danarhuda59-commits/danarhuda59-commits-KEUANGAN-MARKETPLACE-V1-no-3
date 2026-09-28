@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.git
+__pycache__/
+*.pyc
+.venv/
+venv/
+tests/
+.pytest_cache/
+requirements.emergent-image.txt

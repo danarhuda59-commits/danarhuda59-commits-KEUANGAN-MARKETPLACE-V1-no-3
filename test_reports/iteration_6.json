@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 6 regression + marketplace validation. Backend smoke_marketplace.py PASSED (fees, packaging items+configs+assign, order preview/save formulas, single-point stock deduction on status transitions, duplicate order_id blocked, CSV+XLSX import wizard preview→validate→commit KPIs valid/dup/error, settlement with cash-in, reconciliation Matched, dashboard, reports). Additional pytest test_iteration6.py (5/5 PASSED): /api/dashboard 200 no-NaN, /api/reports/profit-loss 200 no-NaN, /api/sales legacy POST 200 (regression), /api/marketplace/dashboard 200 no NaN/Infinity in JSON, /api/marketplace/orders no NaN & margin_pct=0 when net_revenue=0. Frontend Playwright: admin login OK, /marketplace/order page renders with orders-add/status selectors, /marketplace/biaya fee simulator computed total Rp 6.250 for base 100.000 (3 active Shopee fees from smoke), /marketplace/packaging shows items add + config add + assign panel, /marketplace (Dashboard MP) with period-all shows 12 KPI cards populated (Omzet Kotor Rp 1.155.000, Omzet Bersih Rp 1.147.000, HPP Rp 0, Packaging Rp 87.000, MP Fee Rp 9.100, etc.), /marketplace/laporan/sales shows 10 report tabs (sales, hpp, packaging, marketplace-fee, advertising, settlement, reconciliation, profit, products, channels) with CSV/Excel/PDF/Print buttons, /marketplace/settlement and /marketplace/import pages render. Mobile 390px: /marketplace/order and /marketplace have no horizontal overflow (scrollWidth==clientWidth==390).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/marketplace (Dashboard Marketplace)", "issues": ["Recharts warnings 'The width(-1) and height(-1) of chart should be greater than 0' repeated ~12x in console when the dashboard first renders before ResizeObserver kicks in. Chart still renders correctly after resize, but the warnings are console noise. Consider setting min-w/min-h on chart containers or lazy-mounting after layout settles."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/smoke_marketplace.py",
+    "/app/backend/tests/test_iteration6.py",
+    "/app/test_reports/pytest/iteration6.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pytest.ini still forces '-n 2 --dist loadscope' via addopts; tests must be run with '-o addopts=\"\"' to bypass xdist for state-carrying tests. Not blocking but worth cleaning up.",
+    "MarketplaceDashboard: recharts responsive containers log width(-1) warnings on first paint — cosmetic but noisy; add minWidth/minHeight or an initial-hidden guard."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration6.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "owner@keuangan-v1.app / 3kpgWW63mV8onkZN",
+  "seed_data_creation": "No new seed data created. Existing SMOKE_* data from smoke_marketplace.py reused (product SMOKE Produk MP, orders SMOKE-001..). test_iteration6 legacy sale creates a small /api/sales record and does not clean it up (single row, negligible).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend: run `pytest tests/test_iteration6.py -o addopts=\"\" -v` from /app/backend and `python tests/smoke_marketplace.py`. Frontend: use period-all button to see June-2026 SMOKE orders (pod date is Sep 2026). NumberInput data-testid is on the <input> element itself — use `[data-testid=\"fee-sim-base\"]` (not `... input`). Fees table has 3 active Shopee fees already, so fee-sim total = sum of all matching fees, not just 5%. Marketplace reports use testids `mp-report-tab-{type}` for the 10 tabs.",
+  "rca of the issue": "N/A - all tests pass."
+}

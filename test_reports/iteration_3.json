@@ -1,0 +1,37 @@
+{
+  "summary": "Setup verification of Keuangan-1 (UMKM Finance/HPP). Backend + frontend smoke tested against public URL. Wrote /app/backend/tests/test_setup_e2e.py with 8 pytest cases; all PASS (100%). Covers: GET /api/ health, POST /api/auth/login for admin@keuangan.id/admin12345, GET /api/auth/me (with & without token), create raw material (Tapioka kg->gram cf=1000 last_price=10000, price_per_usage=10.0 verified), create product BasoAci cup 12000, create recipe with 2 items (Tapioka 500g waste0 + Gula 100g waste10) yield_qty=20 -- computed material_total=6650 (5000+1650) and hpp_per_unit=332.5 matching formula qty*(last_price/cf)*(1+waste%); POST /api/hpp/calculate returns identical HPP; full ops flow POST /api/purchases (2kg tapioka @10500 + 1kg gula @15500, total=36500) -> stock updates to 2000 gram; POST /api/production 1 batch 20 cup produces product stock=20 with hpp_per_unit>0; POST /api/sales 5 cups @12000 net_total=60000, product stock decrements to 15; all reports (/reports/profit-loss, /reports/sales, /reports/cash-flow, /reports/purchases, /reports/hpp, /dashboard, /dashboard/material-cost-trend, /alerts/stock) return 200; demo seed/status/delete endpoints work; POST /api/auth/register creates isolated business - second account cannot list or GET admin's tapioka (404). Frontend Playwright: login via [data-testid=login-submit-btn] succeeds and dashboard renders (Omzet Rp 60.000 from the e2e sale visible, Nilai Stok Rp 29.545 remaining test material). All 7 main routes (/master-data, /resep, /hpp, /penjualan, /produksi, /laporan, /pengaturan) load without console/page errors and show expected headings. Note file/logo upload emits 'Storage init failed 400' at backend startup as documented (expected).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Login.jsx", "issue": "Submit button uses data-testid 'login-submit-btn' but constants/testIds/auth.js defines 'login-submit-button' (LOGIN.submitButton). Mismatch — either JSX or constant should be aligned so external tests using the constants module work.", "selector": "[data-testid=login-submit-btn] vs LOGIN.submitButton", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_setup_e2e.py", "/app/test_reports/pytest/setup_e2e.xml"],
+  "action_items": [
+    "(Optional/LOW) Align Login submit button data-testid with LOGIN.submitButton constant ('login-submit-button') or update the constant to 'login-submit-btn'.",
+    "(Documented but flagged) Storage init failed 400 at startup — Emergent Object Storage init; only impacts logo/receipt upload; not a bug per request context."
+  ],
+  "critical_code_review_comments": [
+    "auth.py login rate limiter keys on ip+email; behind a K8s ingress the client IP may resolve to a single upstream, potentially locking out all users after 5 admin failures. Consider using X-Forwarded-For or increasing per-IP threshold.",
+    "auth.py register: `body.name.strip()` and `body.business_name.strip()` allow empty name (only whitespace) because Pydantic doesn't enforce min_length. A user with name='' passes; validate_material/product require strip but register does not.",
+    "core.current_user accepts token via query param `?auth=...`. Convenient for downloads, but tokens will land in server access logs / browser history / referer headers. Consider signed short-lived download URLs instead.",
+    "operations.stock_alerts includes items where stock == min_stock even when min_stock == 0 (0 <= 0). Products/materials with min_stock left at default 0 will appear as 'critical' as soon as stock hits 0, which may be by design but floods the alerts list. Consider excluding items with min_stock == 0 or requiring an is_tracked flag.",
+    "finance.material_cost_trend fallback prev_price = hs[0]['price'] (oldest ever) when there's no history 30 days back. Previously flagged in iteration 2 and still present.",
+    "recipes.py create_recipe & update_recipe: no server-side dedupe of default recipe per product — is_default flip is best-effort; concurrent create_recipe calls could produce two default recipes. Consider unique index or transaction.",
+    "master.py simple_crud reuses closures for coll/Model — safe but creates the route decorators at import time inside a function, making it hard to inspect via OpenAPI schema tags. Consider a small class-based CRUD factory.",
+    "settings_router demo/seed does not check idempotency race — two concurrent POSTs could both pass the initial `find_one is_demo` check and double-seed.",
+    "master.py delete_material blocks delete if recipe_items references it but does NOT block if material is referenced from open purchases/inventory transactions; is_deleted marks it hidden but historic reports still resolve by name only — ok, but recipe_cost on soft-deleted materials returns error via load_materials filter, so recipes silently break.",
+    "core.post_inventory silently clamps `new = max(new, 0.0)` after already raising when new < -1e-9. The clamp is dead code but harmless; consider removing.",
+    "finance.pl_summary assumes every sale has platform_fee/service_fee/other_fee/total_hpp fields; legacy sales without these fields (if any migration happens) will KeyError. Consider .get() defaults."
+  ],
+  "updated_files": ["/app/backend/tests/test_setup_e2e.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (7/7 routes load, login OK, no console errors)"},
+  "test_credentials": "admin@keuangan.id / admin12345",
+  "seed_data_creation": "test_setup_e2e.py fixtures create TEST_-prefixed material/product/recipe on admin business; cleanup fixture soft-deletes them at end of module. Executed once so dashboard now shows Omzet Bulan Ini Rp 60.000 & Nilai Stok Rp 29.545 residuals from the flow test (soft-deleted materials still contribute stock_value because dashboard aggregates raw_materials without is_deleted filter — MINOR: dashboard `mats` query uses Q(bid) which does filter is_deleted != True, so residuals may come from lingering purchases/inventory rows). Main agent may want to run DELETE demo or clean DB before demo.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `pytest /app/backend/tests/test_setup_e2e.py -v -n0`. Uses REACT_APP_BACKEND_URL. Frontend login button testid is 'login-submit-btn' (not 'login-submit-button' as in constants). All Indonesian routes: /master-data, /resep, /hpp, /penjualan, /produksi, /laporan, /pengaturan. Storage init failure at startup is expected. Rate limit is 5 tries / 15 min per (ip,email); clear via db.login_attempts.deleteMany({}) if locked. HPP math formula validated: cost_line = qty_in_usage * (last_price/cf) * (1 + waste%/100); hpp_per_unit = (sum_lines + extras) / yield_qty.",
+  "rca of the issue": "No blocking bugs. Two prior iterations' issues (Reports tab crash, mobile sidebar) remained fixed. HPP engine math verified accurate to Rp 0.5 vs manual computation."
+}

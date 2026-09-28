@@ -1,0 +1,32 @@
+{
+  "summary": "Backend + frontend testing for UMKM Finance & HPP MVP. Backend: 43/43 pytest cases pass covering auth, isolation, HPP accuracy (10-material canonical case exact numbers: material_total=6400, total_batch=9900, hpp/unit=990), dynamic recipe items (1/5/10/30/50, all persisted, item_count matches), unit conversion (kg->gram waste 0/5, kg qty), validation (yield 0, negative qty/price, empty recipe, insufficient stock, empty product name), full purchase/production/sale/expense chains, HPP snapshot immutability (old production HPP UNCHANGED after price hike, new production has higher HPP), cash flow accounting math (opening+in-out=closing), inventory summary + block negative adjust, all 11 report endpoints, dashboard, BEP (250 units / Rp 2.500.000), backup, CSV import template + preview, demo status. Frontend: login, dashboard KPIs & period filter work, Recipes CRUD flow works end-to-end (add 3 items, extra cost, realtime sum-material and sum-hpp-unit updates correctly, save persists), HPP calculator (product+recipe select loads items, yield edit updates HPP live, save works, calculations-table gets a new row), Produksi/Pembelian/Penjualan/Pengeluaran/BEP flows all succeed with UI-driven POSTs. Stok/Kas/Laba Rugi/Cash Flow pages load. Settings page tabs (5) render, Demo tab shows demo-status + demo-delete-btn. Mobile 390px: sidebar-toggle-btn is visible, no horizontal overflow. CRITICAL BUG detected on Reports page: switching between tabs (specifically to 'stok') throws JS runtime error `d.filter is not a function`, which crashes the page and hides subsequent tabs and export button. Root cause: useApi (lib/hooks.js) does not reset `data` when URL/deps change, so the previous endpoint's response (an object, e.g. from /reports/hpp) leaks into the next render of Reports Body where the 'stok' case calls `d.filter(...)` assuming an array from /inventory/summary.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Reports (pages/Reports.jsx) + useApi (lib/hooks.js)", "issue": "Switching report tabs throws 'd.filter is not a function' runtime error, crashing the whole Reports page. Occurs because useApi keeps stale `data` across url/deps change; when new tab is 'stok', d is still an object from previous endpoint (e.g. /reports/hpp), and `case \"stok\": d.filter((r)=>r.item_type===...)` fails. Fix options: (a) in useApi, `setData(null)` at start of reload, (b) in Reports Body render, guard each case for expected shape (Array.isArray(d) or d?.summary) and show loading otherwise.", "selector": "[data-testid=report-tab-stok] then any other tab", "priority": "CRITICAL"},
+      {"component": "Reports page export button", "issue": "Expected `data-testid=export-csv-btn` is not present. Reports currently uses per-section DataTable CSV/Excel/Print buttons instead of a page-level export button. Either add master export-csv-btn OR update spec/testids to match.", "selector": "[data-testid=export-csv-btn]", "priority": "LOW"},
+      {"component": "Mobile Sidebar toggle", "issue": "On 390px viewport, clicking [data-testid=sidebar-toggle-btn] does not make nav items visible (nav-resep stayed hidden after toggle). Sidebar drawer may not open or animation state not applied. Please verify manually.", "selector": "[data-testid=sidebar-toggle-btn]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix Reports 'd.filter is not a function' crash: either reset data in useApi on deps change, or guard case bodies in Reports.jsx against stale/wrong-shape data.",
+    "Decide on Reports export-csv-btn: add a page-level export button with that data-testid, or update spec.",
+    "Fix mobile sidebar toggle so nav items become visible after clicking sidebar-toggle-btn at 390px width."
+  ],
+  "critical_code_review_comments": [
+    "lib/hooks.js useApi does not clear `data` when url/deps change; consumers that switch endpoints (Reports) can render with a previous endpoint's shape and crash. Add `setData(null)` at reload start or expose an option.",
+    "Reports.jsx switch/case for 'stok' assumes `d` is an array without guard; every case should validate expected shape before dereferencing (e.g., d?.summary, Array.isArray(d)).",
+    "operations.py Purchase 'purchase_unit_qty' field is set to the purchase-unit string (should be numeric qty in that unit). Minor: naming/typing inconsistency in material_price_history record.",
+    "core.py post_cash appears to work even when cash_account_id is None (auto-picks default) - ensure the auto-default is deterministic and documented for imports/seed."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (43/43)", "frontend": "~85% (critical Reports crash + minor gaps)"},
+  "test_credentials": "danarhuda59@gmail.com / admin123 (owner). Fresh registered users created for isolation.",
+  "seed_data_creation": "Created several TEST_* materials, products, recipes on a fresh registered business (isolated); on admin business created TEST expenses/purchases/sales/production which were exercised then partially cleaned (sale deleted, expense deleted).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green with /app/backend/tests/backend_test.py (pytest -xvs). For frontend re-test the Reports page tab switching, especially [report-tab-stok] after visiting any object-returning tab like [report-tab-hpp] or [report-tab-keuangan] - reproduce the d.filter error. Also verify mobile sidebar-toggle-btn shows nav items. Login is at '/', dashboard is on '/' (not /dashboard). /me returns {user, business} - not flat user."
+}

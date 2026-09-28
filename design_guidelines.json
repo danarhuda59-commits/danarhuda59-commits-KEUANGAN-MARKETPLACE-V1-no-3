@@ -1,0 +1,198 @@
+{
+  "project_info": {
+    "app_name": "Business Finance & HPP Management System (UMKM F&B)",
+    "target_audience": "Pemilik UMKM F&B, Kuliner, Bakery, Katering, dan Produksi Makanan/Minuman di Indonesia",
+    "language": "Bahasa Indonesia",
+    "currency": "Rupiah (IDR - Rp)",
+    "file_extension": "js",
+    "theme_mode": "Light mode default with dark mode toggle option",
+    "archetype": "ORGANIC & PERFORMANCE PRO HYBRID (Warm Slate, Culinary Emerald, Terracotta Accent, Crisp White)"
+  },
+  "typography": {
+    "heading_font": "Outfit, Plus Jakarta Sans, sans-serif",
+    "body_font": "Plus Jakarta Sans, Inter, sans-serif",
+    "mono_font": "JetBrains Mono, Source Code Pro, monospace",
+    "rules": {
+      "anti_default_rule": "Gunakan Outfit untuk Heading utama agar terasa modern, presisi, dan profesional. Jangan gunakan Inter polos untuk main heading.",
+      "h1_hero": "text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 dark:text-slate-100",
+      "h2_section": "text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100",
+      "h3_subsection": "text-lg sm:text-xl font-medium text-slate-800 dark:text-slate-200",
+      "h4_card": "text-base sm:text-lg font-semibold text-slate-800 dark:text-slate-200",
+      "body": "text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed",
+      "small_label": "text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400",
+      "numbers_finance": "font-mono font-semibold tracking-tight text-slate-900 dark:text-slate-50"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "main": "#0F766E",
+        "hover": "#0D9488",
+        "light": "#CCFBF1",
+        "dark": "#115E59",
+        "description": "Culinary Emerald - melambangkan pertumbuhan bisnis, kesegaran F&B, dan profitabilitas"
+      },
+      "secondary": {
+        "main": "#0F172A",
+        "hover": "#1E293B",
+        "light": "#F8FAFC",
+        "description": "Deep Slate - struktur profesional dan kontras finansial yang tajam"
+      },
+      "accent": {
+        "main": "#EA580C",
+        "hover": "#C2410C",
+        "light": "#FFEDD5",
+        "description": "Warm Terracotta / Amber - aksen dinamis untuk indikator stok rendah, resep F&B, dan alert"
+      },
+      "success": "#16A34A",
+      "warning": "#D97706",
+      "danger": "#DC2626",
+      "info": "#0284C7",
+      "neutral_bg_light": "#F8FAFC",
+      "card_bg_light": "#FFFFFF",
+      "border_light": "#E2E8F0",
+      "neutral_bg_dark": "#0F172A",
+      "card_bg_dark": "#1E293B",
+      "border_dark": "#334155"
+    },
+    "forbidden_colors": [
+      "#7351B7",
+      "#1B93A4"
+    ],
+    "chart_colors": [
+      "#0F766E",
+      "#EA580C",
+      "#0284C7",
+      "#16A34A",
+      "#8B5CF6",
+      "#F59E0B"
+    ]
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "p-3, p-4, p-6, p-8, gap-4, gap-6, gap-8",
+    "bento_grid_mode": "MODE B: High Density Dashboard Grid for Financial & Operational scanability",
+    "container_rules": "Kontainer bertanda border WAJIB memiliki padding internal (minimal p-4 sampai p-6) agar teks tidak menempel pada garis tepi border.",
+    "sidebar": {
+      "width": "w-64",
+      "bg": "bg-slate-900 text-slate-300 dark:bg-slate-950",
+      "group_heading": "text-xs font-semibold uppercase tracking-wider text-slate-400 px-3 py-2 mt-4"
+    },
+    "header": {
+      "height": "h-16",
+      "bg": "bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-40 sticky top-0"
+    }
+  },
+  "module_specifications": {
+    "dashboard": {
+      "kpi_cards": [
+        "Omzet Hari Ini / Bulan Ini",
+        "Total Pengeluaran",
+        "Laba Kotor & Laba Bersih",
+        "Saldo Kas & Bank",
+        "Nilai Total Stok Bahan & Produk",
+        "Produk Terjual (Qty & Nomina)",
+        "Jumlah Transaksi",
+        "Peringatan Stok Rendah / Kritis"
+      ],
+      "charts": [
+        "Grafik Tren Omzet, Pengeluaran & Laba Harian/Bulanan (AreaChart/BarChart)",
+        "Grafik Penjualan per Channel (Dine-in, Takeaway, GoFood, GrabFood, ShopeeFood)",
+        "Top 5 Produk Terlaris & Kontribusi Laba"
+      ],
+      "features": "Filter rentang tanggal (Hari Ini, 7 Hari Terakhir, Bulan Ini, Custom), Ringkasan Cepat, Quick Action Button (Tambah Transaksi / Produksi Baru)"
+    },
+    "master_data": {
+      "sub_modules": ["Bahan Baku", "Produk / Menu", "Supplier", "Kategori", "Satuan"],
+      "bahan_baku": "Kelola harga beli terbaru, stok terkini, satuan dasar (gr, ml, pcs, kg), batas minimum stok",
+      "produk": "Kelola nama menu F&B, kategori, harga jual, estimasi HPP, status ketersediaan",
+      "supplier": "Kelola kontak pemasok, alamat, histori pembelian",
+      "kategori_satuan": "Kelola takaran resep F&B dan klasifikasi menu/bahan"
+    },
+    "produksi_and_hpp": {
+      "boms_resep": "Sistem Resep / Bill of Materials (BOM) dinamis dengan tombol TAMBAH BAHAN",
+      "hpp_calculator_realtime": {
+        "components": [
+          "Bahan Baku Utama & Bumbu (Otomatis ambil harga per satuan dari Master Data Bahan)",
+          "Kemasan & Packaging (Dus, Cup, Plastik, Stiker)",
+          "Tenaga Kerja Langsung (Direct Labor cost per batch/unit)",
+          "Overhead Pabrik/Dapur (Listrik, Gas, Air, Depresiasi alat F&B)"
+        ],
+        "outputs": [
+          "Total HPP per Batch",
+          "HPP per Unit / Porsi",
+          "Rekomendasi Harga Jual (Berdasarkan Target Margin/Markup)",
+          "Laba Kotor per Unit (Rp & % Margin)"
+        ]
+      },
+      "pencatatan_produksi": "Form eksekusi produksi yang otomatis memotong stok bahan baku (Ledger keluar) dan menambah stok produk jadi (Ledger masuk)",
+      "stok_ledger": "Histori mutasi stok (Masuk/Keluar/Penyesuaian Opname)"
+    },
+    "transaksi": {
+      "pembelian_bahan": "Pencatatan Restock Bahan Baku dari Supplier (Update harga rata-rata & saldo kas)",
+      "penjualan": "Pencatatan transaksi POS / Channel Sales F&B",
+      "pengeluaran_operasional": "Pencatatan Beban Gaji, Sewa Tempat, Utilities, Marketing, Dll"
+    },
+    "keuangan": {
+      "kas": "Mutasi Arus Kas & Rekening Bank F&B",
+      "laba_rugi": "Laporan Laporan Laba Rugi Sederhana & Detail (Pendapatan - HPP - Beban Operasional = Laba Bersih)",
+      "cash_flow": "Laporan Arus Kas Masuk & Keluar",
+      "bep_calculator": "Perhitungan Break Even Point (BEP Unit & BEP Rupiah) berdasarkan biaya tetap dan biaya variabel"
+    },
+    "laporan_and_export": {
+      "reports": [
+        "Laporan Penjualan & Profitabilitas Menu",
+        "Laporan Pemakaian Bahan Baku & Waste",
+        "Laporan Pembelian & Restock",
+        "Laporan Laba Rugi Periodik",
+        "Laporan Stok Ledger & Valuation"
+      ],
+      "export_formats": ["Export CSV", "Export Excel / Table Copy"]
+    },
+    "pengaturan": {
+      "profil_usaha": "Nama Toko/Resto F&B, Logo, Alamat, Kontak, Target Margin Default",
+      "data_demo": "Tombol Muat Demo Data F&B (Bakery, Kedai Kopi, Resto Padang, Bento Box) & Reset Data",
+      "import_export_backup": "Backup JSON & Restore Data"
+    }
+  },
+  "component_rules": {
+    "shadcn_primitives": "Gunakan Shadcn Dialog untuk modal form, Select untuk opsi dropdown, Table untuk data padat, Sonner untuk toast notification, Card untuk statistik.",
+    "tables": "Tabel data wajib dilengkapi pencarian realtime, filter kategori/status, pagination/item counter, serta format mata uang Rupiah konsisten.",
+    "recipe_dynamic_table": "Tabel Tambah Bahan Baku dinamis harus mendukung penambahan baris baru, penghapusan baris, pemulihan harga/satuan otomatis dari Master Bahan, dan kalkulasi subtotal instan.",
+    "buttons": "Gunakan style rounded-lg, font-medium, hover state dengan kontras tinggi. Gunakan warna Primary (#0F766E) untuk Action Utama.",
+    "currency_formatter": "Gunakan helper function formatRupiah(amount) e.g., 'Rp 150.000' atau 'Rp 1.250.000,00' pada semua komponen finansial."
+  },
+  "testing_and_attributes": {
+    "rule": "Semua elemen interaktif dan data penting WAJIB memiliki atribut data-testid dengan format kebab-case berbasis peran.",
+    "examples": [
+      "data-testid=\"sidebar-nav-dashboard\"",
+      "data-testid=\"kpi-card-omzet\"",
+      "data-testid=\"btn-tambah-bahan-row\"",
+      "data-testid=\"input-harga-jual-hpp\"",
+      "data-testid=\"table-produk-master\"",
+      "data-testid=\"modal-tambah-produksi\"",
+      "data-testid=\"btn-export-excel\"",
+      "data-testid=\"toast-notification\""
+    ]
+  },
+  "image_urls": {
+    "bakery_chef": "https://images.unsplash.com/photo-1593265078328-097c382f2da8?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "fnb_production": "https://images.unsplash.com/photo-1716801574215-7454fb71a471?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "asian_chef": "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "food_catering": "https://images.unsplash.com/photo-1604551969716-5d6d8f77b241?crop=entropy&cs=srgb&fm=jpg&q=85"
+  },
+  "anti_patterns_to_avoid": [
+    "Dilarang menggunakan warna background murni transparan pada Header, Dropdown, atau Modal.",
+    "Dilarang menggunakan emoji robot/AI slop (🤖, 🧠, 🔮) sebagai ikon utama UI.",
+    "Dilarang menyembunyikan navigasi sidebar utama pada tampilan Desktop.",
+    "Dilarang menggunakan font Inter untuk main heading banner.",
+    "Dilarang menggunakan input HTML date biasa untuk tanggal jika Shadcn Calendar / Datepicker tersedia.",
+    "Dilarang melakukan hardcode mata uang tanpa tanda Rp atau format titik ribuan Rupiah."
+  ],
+  "instructions_to_main_agent": [
+    "1. Buat struktur modular yang rapi di src/components dan src/pages.",
+    "2. Sediakan demo data F&B siap pakai (contoh: Kopi Susu Gula Aren, Roti Manis Premium, Sambal Cumi Jar, Nasi Ayam Geprek) agar user langsung mendapatkan gambaran HPP dan finansial nyata.",
+    "3. Pastikan modul HPP kalkulator dapat memperhitungkan Bahan Baku + Packaging + Tenaga Kerja + Overhead secara realtime dan presisi.",
+    "4. Sediakan fitur simpan/ekspor data dan reset demo data pada Pengaturan.",
+    "5. Pastikan semua tombol, modal, input, dan kartu KPI memiliki data-testid untuk testing."
+  ]
+}
