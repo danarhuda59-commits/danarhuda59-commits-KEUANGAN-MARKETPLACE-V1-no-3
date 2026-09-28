@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid, LineChart, Line } from "recharts";
 import { TrendingUp, TrendingDown, Wallet, Landmark, Boxes, Receipt, AlertTriangle, ShoppingBag } from "lucide-react";
 import { PageHeader, StatCard, PeriodFilter, usePeriod } from "../components/common";
@@ -20,7 +21,10 @@ export default function Dashboard() {
   const period = usePeriod("month");
   const { data, loading } = useApi(`/dashboard${qs(period.range)}`, [period.range.start, period.range.end]);
   const { data: alerts } = useApi("/alerts/stock");
+  const { data: dailyStock } = useApi("/alerts/stock/daily");
   const { data: trend } = useApi("/dashboard/material-cost-trend");
+  const { hash } = useLocation();
+  useEffect(() => { if (hash === "#ringkasan-stok" && dailyStock) setTimeout(() => document.getElementById("ringkasan-stok")?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }, [hash, dailyStock]);
   const d = data || {};
   const p = d.period || {};
   const daily = (d.daily || []).map((x) => ({ ...x, label: formatDate(x.date).slice(0, 6) }));
@@ -91,6 +95,31 @@ export default function Dashboard() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel title={<span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-orange-500" />Notifikasi Stok Hari Ini ({alerts?.count ?? 0})</span>} testId="stock-alerts">
+              {dailyStock?.today && (
+                <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-900/50 dark:bg-orange-950/30" id="ringkasan-stok" data-testid="stock-daily-summary">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">Ringkasan Harian · {formatDate(dailyStock.today.date)}</p>
+                    <p className="text-xs text-muted-foreground">Snapshot otomatis setiap 07:00 WIB</p>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                    <div><p className="text-xs text-muted-foreground">Di bawah minimum</p><p className="num text-lg font-bold text-orange-700" data-testid="stock-daily-count">{dailyStock.today.count}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Habis</p><p className="num text-lg font-bold text-red-600">{dailyStock.today.critical}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Bahan / Produk</p><p className="num text-lg font-bold">{dailyStock.today.material_count} / {dailyStock.today.product_count}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Est. biaya restock</p><p className="num text-lg font-bold">{formatRp(dailyStock.today.estimated_cost)}</p></div>
+                  </div>
+                  {(dailyStock.new_items?.length > 0 || dailyStock.resolved_items?.length > 0) && (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      {dailyStock.new_items?.length > 0 && <span className="text-orange-700" data-testid="stock-daily-new">Baru sejak {dailyStock.previous_date ? formatDate(dailyStock.previous_date) : "kemarin"}: {dailyStock.new_items.map((i) => i.name).join(", ")}</span>}
+                      {dailyStock.resolved_items?.length > 0 && <span className="text-emerald-700" data-testid="stock-daily-resolved">Sudah aman: {dailyStock.resolved_items.map((i) => i.name).join(", ")}</span>}
+                    </div>
+                  )}
+                  {dailyStock.history?.length > 1 && (
+                    <div className="mt-3 flex items-end gap-1" title="Tren 7 hari: jumlah item di bawah minimum" data-testid="stock-daily-history">
+                      {dailyStock.history.map((h) => { const mx = Math.max(...dailyStock.history.map((x) => x.count), 1); return <div key={h.date} className="flex flex-1 flex-col items-center gap-0.5"><div className={`w-full rounded-sm ${h.critical > 0 ? "bg-red-400" : "bg-orange-400"}`} style={{ height: `${Math.max(4, (h.count / mx) * 36)}px` }} /><span className="text-[10px] text-muted-foreground">{formatDate(h.date).slice(0, 2)}</span><span className="num text-[10px] font-semibold">{h.count}</span></div>; })}
+                    </div>
+                  )}
+                </div>
+              )}
               {!alerts?.alerts?.length ? <p className="text-sm text-muted-foreground">Semua stok bahan & produk di atas minimum.</p> : (
                 <div className="table-wrap"><table>
                   <thead><tr><th>Item</th><th className="text-right">Stok / Min</th><th className="text-right">Pakai/hari</th><th className="text-right">Sisa hari</th><th className="text-right">Saran</th><th className="text-right">Est. biaya</th></tr></thead>

@@ -22,7 +22,9 @@ export const MP_REPORTS = {
   profit: { title: "Laporan Profit Harian", cols: grp("Tanggal") },
   products: { title: "Laporan per Produk", cols: grp("Produk · SKU") },
   channels: { title: "Laporan per Channel", cols: grp("Channel") },
+  returns: { title: "Laporan Alasan Retur", cols: [{ key: "reason", label: "Alasan" }, { key: "order_count", label: "Order Retur", align: "right" }, { key: "partial_count", label: "Parsial", align: "right" }, { key: "full_count", label: "Penuh", align: "right" }, { key: "refund_qty", label: "Qty Retur", align: "right", render: (r) => formatNum(r.refund_qty) }, rp("refund_amount", "Nilai Refund"), { key: "share_pct", label: "% Refund", align: "right", render: (r) => formatPct(r.share_pct) }, rp("hpp_lost", "HPP Hilang (retur penuh)"), { key: "by_channel", label: "Channel" }] },
 };
+const RETURN_DETAIL_COLS = [...base, { key: "customer", label: "Customer" }, { key: "refund_qty", label: "Qty Retur", align: "right", render: (r) => (r.refund_qty > 0 ? formatNum(r.refund_qty) : "-") }, rp("refund", "Refund"), { key: "refund_reason", label: "Alasan", render: (r) => <span className="badge-low">{r.refund_reason || "Lainnya"}</span>, export: (r) => r.refund_reason }, status, { key: "notes", label: "Keterangan" }];
 
 export default function MarketplaceReports() {
   const { type } = useParams();
@@ -44,7 +46,9 @@ export default function MarketplaceReports() {
           <SelectInput className="h-8 w-auto text-xs" value={f.channel} onChange={(v) => setF({ ...f, channel: v })} options={channelOpts} placeholder="Semua channel" data-testid="mp-report-channel" />
           {!["settlement", "reconciliation"].includes(type) && <><SelectInput className="h-8 w-auto max-w-[220px] text-xs" value={f.product_id} onChange={(v) => setF({ ...f, product_id: v })} options={productOpts(products)} placeholder="Semua produk" data-testid="mp-report-product" /><input className="field-input h-8 w-32 text-xs" placeholder="SKU" value={f.sku} onChange={(e) => setF({ ...f, sku: e.target.value })} data-testid="mp-report-sku" /></>}
         </div>
-        {s && (type === "settlement" ? (
+        {s && (type === "returns" ? (
+          <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6" data-testid="mp-returns-kpis"><StatCard label="Order Retur" value={s.return_orders} sub={`dari ${s.total_orders} order`} tone="accent" testId="mp-returns-count" /><StatCard label="Tingkat Retur" value={formatPct(s.return_rate_pct)} tone={s.return_rate_pct > 5 ? "bad" : "good"} /><StatCard label="Qty Retur" value={formatNum(s.refund_qty)} /><StatCard label="Nilai Refund" value={formatRp(s.refund_amount)} tone="bad" /><StatCard label="HPP Hilang" value={formatRp(s.hpp_lost)} sub="retur penuh" /><StatCard label="Alasan Terbanyak" value={s.top_reason || "-"} tone="primary" testId="mp-returns-top-reason" /></div>
+        ) : type === "settlement" ? (
           <div className="mb-4 grid gap-3 sm:grid-cols-4"><StatCard label="Gross Sales" value={formatRp(s.gross_sales)} /><StatCard label="Expected Payout" value={formatRp(s.expected_payout)} tone="primary" /><StatCard label="Actual Payout" value={formatRp(s.actual_payout)} tone="good" /><StatCard label="Selisih" value={formatRp(s.difference)} tone={Math.abs(s.difference) >= 1 ? "bad" : "good"} /></div>
         ) : type === "reconciliation" ? (
           <div className="mb-4 grid gap-3 sm:grid-cols-4"><StatCard label="Total Penjualan" value={formatRp(s.total_sales)} /><StatCard label="Expected Payout" value={formatRp(s.expected_payout)} tone="primary" /><StatCard label="Actual Payout" value={formatRp(s.actual_payout)} tone="good" /><StatCard label="Selisih" value={formatRp(s.difference)} tone={Math.abs(s.difference) >= 1 ? "bad" : "good"} /></div>
@@ -52,6 +56,7 @@ export default function MarketplaceReports() {
           <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6"><StatCard label="Omzet Bersih" value={formatRp(s.net_revenue)} tone="primary" testId="mp-report-kpi-net" /><StatCard label="HPP" value={formatRp(s.hpp_total)} /><StatCard label="Packaging" value={formatRp(s.packaging_cost)} /><StatCard label="Marketplace Fee" value={formatRp(s.marketplace_fee_total)} tone="accent" /><StatCard label="Advertising" value={formatRp(s.ad_fee)} tone="accent" /><StatCard label="Net Profit" value={formatRp(s.net_profit)} sub={`Margin ${formatPct(s.margin_pct)}`} tone={s.net_profit >= 0 ? "good" : "bad"} testId="mp-report-kpi-profit" /></div>
         ))}
         <DataTable loading={loading} rows={data?.rows || []} columns={cfg.cols} filename={cfg.title} title={cfg.title} testId="mp-report-table" pageSize={20} />
+        {type === "returns" && <div className="mt-8"><h3 className="mb-3 font-heading font-semibold">Detail Order Retur / Refund</h3><DataTable loading={loading} rows={data?.detail || []} columns={RETURN_DETAIL_COLS} filename="detail-retur" testId="mp-returns-detail" pageSize={20} searchKeys={["order_id", "customer", "product_name", "refund_reason"]} /></div>}
       </div>
     </ReportContext.Provider>
   );

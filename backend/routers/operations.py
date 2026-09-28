@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os, hmac, logging
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from typing import Optional, List
 from pydantic import BaseModel
 from core import (db, Q, new_id, now_iso, today_str, TZ, strip, num, current_user, audit, post_inventory, post_cash, reverse_ref,
@@ -474,10 +475,7 @@ async def delete_expense(eid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
-@router.get("/alerts/stock")
-async def stock_alerts(user=Depends(current_user), cover_days: int = 14):
-    """Daily low-stock alert list with suggested reorder qty based on last 30 days usage."""
-    bid = user["business_id"]
+async def compute_stock_alerts(bid, cover_days=14):
     from datetime import datetime, timedelta
     since = (datetime.now(TZ).date() - timedelta(days=30)).isoformat()
     txs = await db.inventory_transactions.find({"business_id": bid, "direction": "out", "reason": {"$in": ["production", "sale"]}, "date": {"$gte": since}}, {"_id": 0, "item_type": 1, "item_id": 1, "qty": 1}).to_list(100000)
@@ -500,7 +498,68 @@ async def stock_alerts(user=Depends(current_user), cover_days: int = 14):
                         "suggested_qty": round(suggested, 2), "suggested_purchase_qty": round(suggested / cf, 3) if kind == "material" else None, "purchase_unit": it.get("purchase_unit") if kind == "material" else None,
                         "estimated_cost": round(suggested * unit_cost, 2), "severity": "critical" if stock <= 0 else "low", "action": "Beli bahan" if kind == "material" else "Produksi"})
     out.sort(key=lambda x: (x["severity"] != "critical", x["days_left"] if x["days_left"] is not None else 1e9))
-    return {"date": today_str(), "count": len(out), "critical": sum(1 for x in out if x["severity"] == "critical"), "alerts": out}
+    return {"date": today_str(), "count": len(out), "critical": sum(1 for x in out if x["severity"] == "critical"),
+            "material_count": sum(1 for x in out if x["item_type"] == "material"), "product_count": sum(1 for x in out if x["item_type"] == "product"), "alerts": out}
+
+
+async def snapshot_stock_daily(bid, force=False):
+    """Simpan ringkasan harian stok menipis (satu dokumen per bisnis per tanggal)."""
+    today = today_str()
+    existing = await db.stock_alert_daily.find_one({"business_id": bid, "date": today}, {"_id": 0})
+    if existing and not force:
+        return existing
+    res = await compute_stock_alerts(bid)
+    doc = {"id": existing["id"] if existing else new_id(), "business_id": bid, "date": today, "count": res["count"], "critical": res["critical"], "material_count": res["material_count"], "product_count": res["product_count"],
+           "estimated_cost": round(sum(a["estimated_cost"] for a in res["alerts"]), 2),
+           "items": [{k: a[k] for k in ("item_type", "item_id", "name", "unit", "stock", "min_stock", "severity", "suggested_qty", "action")} for a in res["alerts"]], "created_at": now_iso()}
+    await db.stock_alert_daily.replace_one({"business_id": bid, "date": today}, dict(doc), upsert=True)
+    return doc
+
+
+@router.get("/alerts/stock")
+async def stock_alerts(user=Depends(current_user), cover_days: int = 14):
+    """Daily low-stock alert list with suggested reorder qty based on last 30 days usage."""
+    return await compute_stock_alerts(user["business_id"], cover_days)
+
+
+@router.get("/alerts/stock/daily")
+async def stock_alerts_daily(user=Depends(current_user), days: int = 7):
+    bid = user["business_id"]
+    today = await snapshot_stock_daily(bid, force=True)
+    history = await db.stock_alert_daily.find({"business_id": bid}, {"_id": 0, "items": 0}).sort("date", -1).to_list(max(1, min(days, 60)))
+    prev = await db.stock_alert_daily.find_one({"business_id": bid, "date": {"$lt": today["date"]}}, {"_id": 0}, sort=[("date", -1)])
+    prev_ids = {i["item_id"] for i in (prev or {}).get("items", [])}
+    cur_ids = {i["item_id"] for i in today["items"]}
+    return {"today": today, "history": list(reversed(history)), "previous_date": (prev or {}).get("date"),
+            "new_items": [i for i in today["items"] if i["item_id"] not in prev_ids], "resolved_items": [i for i in (prev or {}).get("items", []) if i["item_id"] not in cur_ids]}
+
+
+async def snapshot_all_businesses():
+    for b in await db.businesses.find({}, {"_id": 0, "id": 1}).to_list(10000):
+        try:
+            await snapshot_stock_daily(b["id"], force=True)
+        except Exception as e:
+            logging.getLogger(__name__).error("stock snapshot failed for %s: %s", b["id"], e)
+
+
+@router.post("/cron/stock-daily")
+async def cron_stock_daily(request: Request, background: BackgroundTasks):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    secret = os.environ.get("WEBHOOK_CRON_SECRET", "")
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not secret or not token or not hmac.compare_digest(token, secret):
+        raise HTTPException(401, "Unauthorized")
+    try:
+        body = await request.json() if await request.body() else {}
+    except ValueError:
+        raise HTTPException(400, "Invalid body")
+    run_id = request.headers.get("X-Webhook-Id") or (body or {}).get("run_id") or new_id()
+    if await db.cron_runs.find_one({"run_id": run_id}):
+        return {"ok": True, "duplicate": True}
+    await db.cron_runs.insert_one({"run_id": run_id, "job": "stock-daily", "created_at": now_iso()})
+    background.add_task(snapshot_all_businesses)
+    return {"ok": True, "run_id": run_id}
 
 
 @router.get("/meta")

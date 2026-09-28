@@ -6,9 +6,9 @@ import { useApi, qs } from "../../lib/hooks";
 import { formatRp, formatNum, formatPct, formatDate, todayISO } from "../../lib/format";
 import { PageHeader, DataTable, Modal, ConfirmDialog, Field, TextInput, NumberInput, SelectInput, TextArea, SummaryRow, PeriodFilter, usePeriod, StatCard } from "../../components/common";
 import { Button } from "../../components/ui/button";
-import { channelOpts, statusOpts, StatusBadge, ChannelBadge, useProducts, productOpts, STATUSES } from "../../lib/marketplace";
+import { channelOpts, statusOpts, StatusBadge, ChannelBadge, useProducts, productOpts, STATUSES, REFUND_STATUSES, reasonOpts } from "../../lib/marketplace";
 
-const EMPTY = { order_id: "", date: todayISO(), channel: "Shopee", customer: "", product_id: "", qty: 1, normal_price: "", selling_price: "", discount: 0, voucher: 0, shipping_fee: 0, shipping_subsidy: 0, fee_mode: "auto", admin_fee: "", service_fee: "", transaction_fee: "", other_marketplace_fee: "", ad_fee: 0, other_operational_fee: 0, refund: 0, refund_qty: 0, pack_mode: "auto", packaging_cost_per_unit: "", status: "Selesai", notes: "" };
+const EMPTY = { order_id: "", date: todayISO(), channel: "Shopee", customer: "", product_id: "", qty: 1, normal_price: "", selling_price: "", discount: 0, voucher: 0, shipping_fee: 0, shipping_subsidy: 0, fee_mode: "auto", admin_fee: "", service_fee: "", transaction_fee: "", other_marketplace_fee: "", ad_fee: 0, other_operational_fee: 0, refund: 0, refund_qty: 0, refund_reason: "", pack_mode: "auto", packaging_cost_per_unit: "", status: "Selesai", notes: "" };
 const n = (v) => (v === "" || v === null || v === undefined ? 0 : parseFloat(v) || 0);
 
 export const toPayload = (f) => ({
@@ -68,6 +68,7 @@ function OrderForm({ form, setForm, products }) {
         <Field label="Voucher"><NumberInput value={form.voucher} onChange={set("voucher")} data-testid="order-voucher" /></Field>
         <Field label="Refund / Retur (Rp)" hint="Kosongkan untuk dihitung proporsional dari qty retur"><NumberInput value={form.refund} onChange={set("refund")} data-testid="order-refund" /></Field>
         <Field label="Qty Retur (refund parsial)"><NumberInput value={form.refund_qty} onChange={set("refund_qty")} data-testid="order-refund-qty" /></Field>
+        {(n(form.refund_qty) > 0 || n(form.refund) > 0 || REFUND_STATUSES.includes(form.status)) && <Field label="Alasan Retur / Refund" required><SelectInput value={form.refund_reason} onChange={set("refund_reason")} options={reasonOpts} placeholder="Pilih alasan" data-testid="order-refund-reason" /></Field>}
         <Field label="Ongkir (dibayar customer)"><NumberInput value={form.shipping_fee} onChange={set("shipping_fee")} data-testid="order-shipping" /></Field>
         <Field label="Subsidi Ongkir"><NumberInput value={form.shipping_subsidy} onChange={set("shipping_subsidy")} data-testid="order-shipping-subsidy" /></Field>
         <Field label="Status Pesanan" required><SelectInput value={form.status} onChange={set("status")} options={statusOpts} allowEmpty={false} data-testid="order-status" /></Field>
@@ -112,6 +113,7 @@ export default function Orders() {
   const rows = useMemo(() => data || [], [data]);
   const sum = useMemo(() => { const a = rows.filter((o) => !["Pending", "Dibatalkan"].includes(o.status)); return { net: a.reduce((s, o) => s + o.net_revenue, 0), profit: a.reduce((s, o) => s + o.net_profit, 0), pack: a.reduce((s, o) => s + o.packaging_cost, 0), fee: a.reduce((s, o) => s + o.marketplace_fee_total, 0) }; }, [rows]);
   const save = async () => {
+    if ((n(form.refund_qty) > 0 || n(form.refund) > 0 || REFUND_STATUSES.includes(form.status)) && !form.refund_reason) return toast.error("Pilih alasan retur / refund");
     try {
       setSaving(true);
       const r = form.id ? await api.put(`/marketplace/orders/${form.id}`, toPayload(form)) : await api.post("/marketplace/orders", toPayload(form));
@@ -149,7 +151,7 @@ export default function Orders() {
         {form && <OrderForm form={form} setForm={setForm} products={products} />}
       </Modal>
       <Modal open={!!detail} onClose={() => setDetail(null)} title={`Order ${detail?.order_id}`} description={detail ? `${detail.channel} · ${formatDate(detail.date)} · ${detail.product_name} ×${formatNum(detail.qty)} · ${detail.customer || "-"}` : ""}>
-        {detail && <><div className="flex items-center gap-2"><StatusBadge status={detail.status} />{detail.stock_deducted ? <span className="badge-ok">Stok sudah dikurangi{detail.refund_qty > 0 ? ` (${formatNum(detail.qty_net ?? detail.qty)} unit, retur ${formatNum(detail.refund_qty)})` : ""}</span> : <span className="badge-muted">Stok belum dikurangi</span>}{detail.refund_qty > 0 && <span className="badge-low" data-testid="order-detail-partial-refund">Refund parsial</span>}<span className="text-xs text-muted-foreground">sumber: {detail.source}</span></div><OrderBreakdown o={detail} testId="order-detail-breakdown" /></>}
+        {detail && <><div className="flex items-center gap-2"><StatusBadge status={detail.status} />{detail.stock_deducted ? <span className="badge-ok">Stok sudah dikurangi{detail.refund_qty > 0 ? ` (${formatNum(detail.qty_net ?? detail.qty)} unit, retur ${formatNum(detail.refund_qty)})` : ""}</span> : <span className="badge-muted">Stok belum dikurangi</span>}{detail.refund_qty > 0 && <span className="badge-low" data-testid="order-detail-partial-refund">Refund parsial</span>}{detail.refund_reason && <span className="badge-muted" data-testid="order-detail-refund-reason">Alasan: {detail.refund_reason}</span>}<span className="text-xs text-muted-foreground">sumber: {detail.source}</span></div><OrderBreakdown o={detail} testId="order-detail-breakdown" /></>}
       </Modal>
       <ConfirmDialog open={!!del} onClose={() => setDel(null)} onConfirm={remove} title={`Hapus order ${del?.order_id}?`} description="Stok yang sudah dikurangi akan dikembalikan." />
     </div>

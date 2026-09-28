@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
-import { LayoutDashboard, Package, Boxes, Truck, Tags, Ruler, BookOpen, Factory, Warehouse, ShoppingCart, Receipt, Wallet, Landmark, TrendingUp, ArrowLeftRight, Target, FileBarChart, Settings, LogOut, Menu, X, Calculator, Sun, Moon, Bell, Store, PackageOpen, Percent, Upload, Banknote, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Package, Boxes, Truck, Tags, Ruler, BookOpen, Factory, Warehouse, ShoppingCart, Receipt, Wallet, Landmark, TrendingUp, ArrowLeftRight, Target, FileBarChart, Settings, LogOut, Menu, X, Calculator, Sun, Moon, Bell, Store, PackageOpen, Percent, Upload, Banknote, ClipboardList, AlertTriangle } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useApi } from "../lib/hooks";
 import { cn } from "../lib/utils";
@@ -56,6 +56,9 @@ export default function Layout() {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
   const { user, logout } = useAuth();
   const { data: alerts } = useApi("/alerts/stock");
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const [bannerHidden, setBannerHidden] = useState(() => localStorage.getItem("stockBannerDismissed") === todayKey);
+  const dismissBanner = () => { localStorage.setItem("stockBannerDismissed", todayKey); setBannerHidden(true); };
   const nav = useNavigate();
   const toggleDark = () => {
     const d = !dark;
@@ -90,6 +93,15 @@ export default function Layout() {
             <button onClick={async () => { await logout(); nav("/login"); }} className="rounded-md p-2 hover:bg-muted" title="Keluar" data-testid="logout-btn"><LogOut className="h-4 w-4" /></button>
           </div>
         </header>
+        {alerts?.count > 0 && !bannerHidden && (
+          <div className="no-print flex flex-wrap items-center justify-between gap-2 border-b border-orange-200 bg-orange-50 px-4 py-2 text-sm text-orange-900 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200 sm:px-6" role="alert" data-testid="low-stock-banner">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-orange-600" />
+              <span><b data-testid="low-stock-banner-count">{alerts.count} item</b> stok di bawah minimum{alerts.critical > 0 && <> · <b className="text-red-600">{alerts.critical} habis</b></>}{alerts.material_count > 0 && <> · {alerts.material_count} bahan baku</>}{alerts.product_count > 0 && <> · {alerts.product_count} produk</>}. <Link to="/#ringkasan-stok" className="font-semibold underline underline-offset-2" data-testid="low-stock-banner-link">Lihat ringkasan harian</Link></span>
+            </div>
+            <button onClick={dismissBanner} className="rounded-md px-2 py-0.5 text-xs hover:bg-orange-100 dark:hover:bg-orange-900/40" data-testid="low-stock-banner-dismiss">Sembunyikan hari ini</button>
+          </div>
+        )}
         <main className="p-4 sm:p-6 lg:p-8"><Outlet /></main>
       </div>
     </div>

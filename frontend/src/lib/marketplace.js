@@ -5,6 +5,9 @@ export const CHANNELS = ["Shopee", "TikTok Shop", "Tokopedia", "Website"];
 export const STATUSES = ["Pending", "Diproses", "Dikirim", "Selesai", "Dibatalkan", "Dikembalikan", "Refund"];
 export const channelOpts = CHANNELS.map((c) => ({ value: c, label: c }));
 export const statusOpts = STATUSES.map((s) => ({ value: s, label: s }));
+export const REFUND_STATUSES = ["Dikembalikan", "Refund"];
+export const REFUND_REASONS = ["Rusak", "Salah kirim", "Berubah pikiran", "Tidak sesuai deskripsi", "Terlambat", "Lainnya"];
+export const reasonOpts = REFUND_REASONS.map((r) => ({ value: r, label: r }));
 
 const STATUS_CLS = {
   Pending: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300", Diproses: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300", Dikirim: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",

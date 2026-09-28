@@ -12,6 +12,24 @@ CHANNELS = ["Shopee", "TikTok Shop", "Tokopedia", "Website"]
 STATUSES = ["Pending", "Diproses", "Dikirim", "Selesai", "Dibatalkan", "Dikembalikan", "Refund"]
 STOCK_STATUSES = {"Diproses", "Dikirim", "Selesai"}
 REFUND_STATUSES = {"Dikembalikan", "Refund"}
+REFUND_REASONS = ["Rusak", "Salah kirim", "Berubah pikiran", "Tidak sesuai deskripsi", "Terlambat", "Lainnya"]
+REASON_KEYWORDS = {"Rusak": ["rusak", "damage", "pecah", "cacat", "defect", "broken"], "Salah kirim": ["salah kirim", "wrong item", "salah barang", "salah produk", "salah alamat"],
+                   "Berubah pikiran": ["berubah pikiran", "change of mind", "tidak jadi", "batal", "changed mind"], "Tidak sesuai deskripsi": ["tidak sesuai", "not as described", "beda", "mismatch"],
+                   "Terlambat": ["terlambat", "late", "lama", "delay"]}
+
+
+def normalize_reason(v):
+    s = (v or "").strip()
+    if not s:
+        return ""
+    for r in REFUND_REASONS:
+        if s.lower() == r.lower():
+            return r
+    low = s.lower()
+    for r, kws in REASON_KEYWORDS.items():
+        if any(k in low for k in kws):
+            return r
+    return "Lainnya"
 FEE_CATEGORIES = {"admin": "admin_fee", "service": "service_fee", "transaction": "transaction_fee", "other": "other_marketplace_fee"}
 FEE_FIELDS = list(FEE_CATEGORIES.values())
 R = lambda v: round(float(v or 0), 2)
@@ -284,6 +302,7 @@ class OrderIn(BaseModel):
     other_operational_fee: float = 0
     refund: float = 0
     refund_qty: float = 0
+    refund_reason: Optional[str] = ""
     packaging_cost_per_unit: Optional[float] = None
     status: str = "Pending"
     notes: Optional[str] = ""
@@ -326,6 +345,10 @@ async def build_order(bid, body: OrderIn, user, oid, existing=None):
         raise HTTPException(400, f"Qty refund/retur ({refund_qty:g}) tidak boleh melebihi qty order ({qty:g})")
     if refund_qty > 0 and refund <= 0 and body.status not in REFUND_STATUSES:
         refund = max((price * qty - discount - voucher) * refund_qty / qty, 0)
+    has_return = refund_qty > 0 or refund > 0 or body.status in REFUND_STATUSES
+    refund_reason = normalize_reason(body.refund_reason) if has_return else ""
+    if has_return and not refund_reason:
+        refund_reason = "Lainnya"
     ad_fee, other_op = num(body.ad_fee, "Biaya iklan"), num(body.other_operational_fee, "Biaya operasional lain")
     ship, subsidy = num(body.shipping_fee, "Ongkir"), num(body.shipping_subsidy, "Subsidi ongkir")
     date = body.date or today_str()
@@ -350,7 +373,7 @@ async def build_order(bid, body: OrderIn, user, oid, existing=None):
         "product_id": product["id"], "product_name": product["name"], "sku": product.get("sku") or "", "unit": product.get("unit"), "qty": qty,
         "normal_price": num(body.normal_price, "Harga normal") if body.normal_price is not None else price, "selling_price": price,
         "discount": discount, "voucher": voucher, "shipping_fee": ship, "shipping_subsidy": subsidy, **fees, "fee_source": fee_source, "fee_detail": fee_detail,
-        "ad_fee": ad_fee, "other_operational_fee": other_op, "refund": refund, "packaging_name": pack_name, **calc,
+        "ad_fee": ad_fee, "other_operational_fee": other_op, "refund": refund, "refund_reason": refund_reason, "packaging_name": pack_name, **calc,
         "status": body.status, "notes": body.notes or "", "source": body.source or "manual",
         "stock_deducted": bool(existing and existing.get("stock_deducted")), "stock_warning": None,
         "created_by": user["id"], "created_at": existing["created_at"] if existing else now_iso(), "updated_at": now_iso(),
@@ -466,7 +489,7 @@ ORDER_FIELDS = [
     ("order_id", "Order ID", True), ("date", "Tanggal", False), ("sku", "SKU", False), ("product_name", "Nama Produk", False), ("qty", "Qty", True),
     ("selling_price", "Harga Jual", True), ("normal_price", "Harga Normal", False), ("discount", "Diskon", False), ("voucher", "Voucher", False),
     ("shipping_fee", "Ongkir", False), ("shipping_subsidy", "Subsidi Ongkir", False), ("admin_fee", "Biaya Admin", False), ("service_fee", "Biaya Layanan", False),
-    ("transaction_fee", "Biaya Transaksi", False), ("other_marketplace_fee", "Biaya Marketplace Lain", False), ("ad_fee", "Biaya Iklan", False), ("refund", "Refund", False), ("refund_qty", "Qty Refund/Retur", False),
+    ("transaction_fee", "Biaya Transaksi", False), ("other_marketplace_fee", "Biaya Marketplace Lain", False), ("ad_fee", "Biaya Iklan", False), ("refund", "Refund", False), ("refund_qty", "Qty Refund/Retur", False), ("refund_reason", "Alasan Retur", False),
     ("customer", "Customer", False), ("status", "Status", False), ("notes", "Keterangan", False),
 ]
 ALIASES = {
@@ -488,6 +511,7 @@ ALIASES = {
     "ad_fee": ["biaya iklan", "ads", "advertising fee", "iklan"],
     "refund": ["refund", "pengembalian dana", "total refund", "returned amount", "jumlah pengembalian"],
     "refund_qty": ["qty refund", "qty retur", "jumlah retur", "jumlah dikembalikan", "returned quantity", "return qty", "qty dikembalikan"],
+    "refund_reason": ["alasan retur", "alasan refund", "alasan pengembalian", "return reason", "refund reason", "alasan"],
     "customer": ["username (pembeli)", "nama penerima", "pembeli", "customer", "buyer username", "recipient", "nama pembeli"],
     "status": ["status pesanan", "status", "order status"],
     "notes": ["catatan", "keterangan", "notes", "pesan dari pembeli"],
@@ -609,6 +633,7 @@ async def import_validate(body: ImportValidateIn, user=Depends(current_user)):
             errors.append({"field": "status", "value": g("status"), "reason": "Status tidak dikenali"})
             data["status"] = body.default_status
         data["customer"], data["notes"] = g("customer"), g("notes")
+        data["refund_reason"] = normalize_reason(g("refund_reason")) if body.mapping.get("refund_reason") else ""
         key = (data["order_id"], data["sku"].lower())
         dup_file = key in seen
         seen.add(key)
@@ -640,7 +665,7 @@ async def import_commit(body: ImportCommitIn, user=Depends(current_user)):
             payload = OrderIn(order_id=d["order_id"], date=d.get("date"), channel=body.channel, customer=d.get("customer") or "", product_id=d["product_id"], qty=d["qty"], normal_price=d.get("normal_price"),
                               selling_price=d["selling_price"], discount=d.get("discount") or 0, voucher=d.get("voucher") or 0, shipping_fee=d.get("shipping_fee") or 0, shipping_subsidy=d.get("shipping_subsidy") or 0,
                               admin_fee=d.get("admin_fee"), service_fee=d.get("service_fee"), transaction_fee=d.get("transaction_fee"), other_marketplace_fee=d.get("other_marketplace_fee"),
-                              ad_fee=d.get("ad_fee") or 0, refund=d.get("refund") or 0, refund_qty=d.get("refund_qty") or 0, status=d.get("status") or "Selesai", notes=d.get("notes") or "", source=f"import:{body.channel}")
+                              ad_fee=d.get("ad_fee") or 0, refund=d.get("refund") or 0, refund_qty=d.get("refund_qty") or 0, refund_reason=d.get("refund_reason") or "", status=d.get("status") or "Selesai", notes=d.get("notes") or "", source=f"import:{body.channel}")
             doc = await build_order(bid, payload, user, new_id())
             doc = await sync_stock(bid, doc, user)
             await db.sales_orders.insert_one(dict(doc))
@@ -834,7 +859,36 @@ async def dashboard(user=Depends(current_user), start: str = "", end: str = "", 
             "by_status": [{"status": s, "count": sum(1 for o in orders if o["status"] == s)} for s in STATUSES]}
 
 
-REPORT_TYPES = ("sales", "hpp", "packaging", "marketplace-fee", "advertising", "settlement", "reconciliation", "profit", "products", "channels")
+REPORT_TYPES = ("sales", "hpp", "packaging", "marketplace-fee", "advertising", "settlement", "reconciliation", "profit", "products", "channels", "returns")
+
+
+def returns_report(orders):
+    """Laporan alasan retur: order dengan refund/retur (parsial maupun penuh), dikelompokkan per alasan."""
+    rets = [o for o in orders if o["status"] != "Dibatalkan" and ((o.get("refund") or 0) > 0 or (o.get("refund_qty") or 0) > 0 or o["status"] in REFUND_STATUSES)]
+    total_refund = sum(o.get("refund") or 0 for o in rets)
+    by_reason = defaultdict(list)
+    for o in rets:
+        by_reason[o.get("refund_reason") or "Lainnya"].append(o)
+    rows = []
+    for reason in REFUND_REASONS + sorted(set(by_reason) - set(REFUND_REASONS)):
+        os_ = by_reason.get(reason)
+        if not os_:
+            continue
+        refund = sum(o.get("refund") or 0 for o in os_)
+        qty = sum((o.get("refund_qty") or 0) if o["status"] not in REFUND_STATUSES else float(o.get("refund_qty") or o["qty"]) for o in os_)
+        ch = defaultdict(int)
+        for o in os_:
+            ch[o["channel"]] += 1
+        rows.append({"key": reason, "reason": reason, "order_count": len(os_), "full_count": sum(1 for o in os_ if o["status"] in REFUND_STATUSES), "partial_count": sum(1 for o in os_ if o["status"] not in REFUND_STATUSES),
+                     "refund_qty": R(qty), "refund_amount": R(refund), "hpp_lost": R(sum(o.get("hpp_total") or 0 for o in os_ if o["status"] in REFUND_STATUSES)), "share_pct": round(safe_div(refund, total_refund) * 100, 2),
+                     "by_channel": ", ".join(f"{c} ({n})" for c, n in sorted(ch.items(), key=lambda x: -x[1])), "top_channel": max(ch.items(), key=lambda x: x[1])[0] if ch else "-"})
+    active = [o for o in orders if o["status"] not in ("Pending", "Dibatalkan")]
+    summary = {"return_orders": len(rets), "total_orders": len(active), "return_rate_pct": round(safe_div(len(rets), len(active)) * 100, 2), "refund_amount": R(total_refund),
+               "refund_qty": R(sum(r["refund_qty"] for r in rows)), "hpp_lost": R(sum(r["hpp_lost"] for r in rows)), "top_reason": rows[0]["reason"] if rows else None}
+    if rows:
+        summary["top_reason"] = max(rows, key=lambda r: r["order_count"])["reason"]
+    detail = sorted(({k: o.get(k) for k in ("id", "date", "order_id", "channel", "product_name", "sku", "qty", "refund_qty", "refund", "refund_reason", "status", "customer", "notes", "net_profit")} for o in rets), key=lambda o: o["date"], reverse=True)
+    return {"summary": summary, "rows": rows, "detail": detail}
 
 
 @router.get("/reports/{rtype}")
@@ -848,6 +902,8 @@ async def report(rtype: str, user=Depends(current_user), start: str = "", end: s
     if rtype == "reconciliation":
         return await reconciliation(user, start, end, channel, "")
     orders = await filtered_orders(bid, start, end, channel, product_id, sku, "")
+    if rtype == "returns":
+        return returns_report(orders)
     summary = summarize(orders)
     if rtype == "products":
         return {"summary": summary, "rows": sorted(group_by(orders, lambda o: f"{o['product_name']}|{o.get('sku') or ''}"), key=lambda r: -r["net_revenue"])}
@@ -861,5 +917,5 @@ async def report(rtype: str, user=Depends(current_user), start: str = "", end: s
 
 @router.get("/meta")
 async def marketplace_meta(user=Depends(current_user)):
-    return {"channels": CHANNELS, "statuses": STATUSES, "stock_statuses": sorted(STOCK_STATUSES), "fee_categories": [{"value": k, "label": l} for k, l in (("admin", "Biaya Admin"), ("service", "Biaya Layanan"), ("transaction", "Biaya Transaksi"), ("other", "Biaya Marketplace Lainnya"))],
+    return {"channels": CHANNELS, "statuses": STATUSES, "stock_statuses": sorted(STOCK_STATUSES), "refund_reasons": REFUND_REASONS, "fee_categories": [{"value": k, "label": l} for k, l in (("admin", "Biaya Admin"), ("service", "Biaya Layanan"), ("transaction", "Biaya Transaksi"), ("other", "Biaya Marketplace Lainnya"))],
             "import_fields": [{"key": k, "label": l, "required": r} for k, l, r in ORDER_FIELDS]}
