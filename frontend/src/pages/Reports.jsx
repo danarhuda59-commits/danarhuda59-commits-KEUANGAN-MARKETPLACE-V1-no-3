@@ -5,6 +5,7 @@ import { formatRp, formatNum, formatPct, formatDate, printPage } from "../lib/fo
 import { Button } from "../components/ui/button";
 import { PageHeader, DataTable, PeriodFilter, usePeriod, StatCard, ReportContext } from "../components/common";
 import { cn } from "../lib/utils";
+import { SourceBadge } from "../lib/marketplace";
 
 const TYPES = [
   { key: "penjualan", label: "Penjualan" }, { key: "pembelian", label: "Pembelian" }, { key: "pengeluaran", label: "Pengeluaran" }, { key: "hpp", label: "HPP" }, { key: "stok", label: "Stok" },
@@ -15,6 +16,8 @@ const rpd = (k, label) => ({ key: k, label, align: "right", render: (r) => forma
 const nm = (k, label) => ({ key: k, label, align: "right", render: (r) => formatNum(r[k]) });
 const pct = (k, label) => ({ key: k, label, align: "right", render: (r) => formatPct(r[k]) });
 const dt = { key: "date", label: "Tanggal", render: (r) => formatDate(r.date) };
+const badged = (k, label) => ({ key: k, label, render: (r) => <span className="inline-flex items-center gap-1.5">{r[k]}{r.marketplace_count > 0 && <SourceBadge count={r.marketplace_count} />}</span>, export: (r) => r[k] });
+const numCol = { key: "number", label: "Nomor", render: (r) => <span className="inline-flex items-center gap-1.5">{r.number}{r.source === "marketplace" && <SourceBadge />}</span>, export: (r) => r.number };
 
 const Section = ({ title, children }) => <div className="mb-8"><h3 className="mb-3 font-heading font-semibold">{title}</h3>{children}</div>;
 
@@ -27,9 +30,9 @@ function Body({ type, range, title }) {
   switch (type) {
     case "penjualan": return (<>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4"><StatCard label="Omzet bersih" value={formatRp(d.summary.net_sales)} tone="primary" /><StatCard label="HPP" value={formatRp(d.summary.hpp)} /><StatCard label="Laba kotor" value={formatRp(d.summary.gross_profit)} tone="good" /><StatCard label="Transaksi" value={d.summary.transactions} /></div>
-      <Section title="Per Produk"><DataTable testId="rpt-sales-products" filename="laporan-penjualan-produk" rows={d.by_product} columns={[{ key: "product_name", label: "Produk" }, { key: "sku", label: "SKU" }, nm("qty", "Qty"), rp("avg_price", "Harga Jual"), rpd("hpp_per_unit", "HPP/Unit"), rp("omzet", "Omzet"), rp("hpp", "HPP"), rp("profit", "Laba"), pct("margin_pct", "Margin")]} /></Section>
-      <Section title="Per Channel"><DataTable testId="rpt-sales-channels" filename="laporan-penjualan-channel" rows={d.by_channel} columns={[{ key: "channel", label: "Channel" }, { key: "count", label: "Transaksi", align: "right" }, rp("omzet", "Omzet"), rp("fees", "Biaya"), rp("net", "Bersih"), rp("hpp", "HPP"), rp("profit", "Laba"), pct("margin_pct", "Margin")]} /></Section>
-      <Section title="Detail Transaksi"><DataTable testId="rpt-sales-detail" filename="laporan-penjualan" rows={d.sales} loading={loading} searchKeys={["number", "channel"]} columns={[{ key: "number", label: "Nomor" }, dt, { key: "channel", label: "Channel" }, { label: "Produk", key: (r) => r.items.map((i) => `${i.product_name} ×${formatNum(i.qty)}`).join(", ") }, nm("qty_total", "Qty"), rp("total", "Total"), rp("net_total", "Bersih"), rp("total_hpp", "HPP"), rp("profit", "Laba")]} /></Section>
+      <Section title="Per Produk"><DataTable testId="rpt-sales-products" filename="laporan-penjualan-produk" rows={d.by_product} columns={[badged("product_name", "Produk"), { key: "sku", label: "SKU" }, nm("qty", "Qty"), rp("avg_price", "Harga Jual"), rpd("hpp_per_unit", "HPP/Unit"), rp("omzet", "Omzet"), rp("hpp", "HPP"), rp("profit", "Laba"), pct("margin_pct", "Margin")]} /></Section>
+      <Section title="Per Channel"><DataTable testId="rpt-sales-channels" filename="laporan-penjualan-channel" rows={d.by_channel} columns={[badged("channel", "Channel"), { key: "count", label: "Transaksi", align: "right" }, rp("omzet", "Omzet"), rp("fees", "Biaya"), rp("net", "Bersih"), rp("hpp", "HPP"), rp("profit", "Laba"), pct("margin_pct", "Margin")]} /></Section>
+      <Section title="Detail Transaksi"><DataTable testId="rpt-sales-detail" filename="laporan-penjualan" rows={d.sales} loading={loading} searchKeys={["number", "channel"]} columns={[numCol, dt, { key: "channel", label: "Channel" }, { label: "Produk", key: (r) => r.items.map((i) => `${i.product_name} ×${formatNum(i.qty)}`).join(", ") }, nm("qty_total", "Qty"), rp("total", "Total"), rp("net_total", "Bersih"), rp("total_hpp", "HPP"), rp("profit", "Laba")]} /></Section>
     </>);
     case "pembelian": return (<>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3"><StatCard label="Total pembelian" value={formatRp(d.total)} /><StatCard label="Transaksi" value={d.count} /><StatCard label="Belum dibayar" value={formatRp(d.unpaid)} tone="accent" /></div>
@@ -57,6 +60,7 @@ function Body({ type, range, title }) {
     </>);
     case "keuangan": { const s = d.summary; const rows = [["Omzet (bruto)", s.omzet], ["Biaya platform/layanan", -s.sales_fees], ["Penjualan bersih", s.net_sales], ["HPP penjualan", -s.hpp], ["LABA KOTOR", s.gross_profit], ["Beban operasional", -s.opex], ["LABA BERSIH", s.net_profit]].map(([label, value]) => ({ label, value }));
       return (<>
+        {d.marketplace_included && <p className="mb-4 flex items-center gap-2 text-sm text-muted-foreground" data-testid="rpt-finance-mp-note"><SourceBadge />Termasuk {d.marketplace_summary?.transactions || 0} order marketplace (omzet {formatRp(d.marketplace_summary?.omzet)}).</p>}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4"><StatCard label="Penjualan bersih" value={formatRp(s.net_sales)} tone="primary" /><StatCard label="Laba kotor" value={formatRp(s.gross_profit)} sub={formatPct(s.gross_margin_pct)} tone="good" /><StatCard label="Beban operasional" value={formatRp(s.opex)} tone="accent" /><StatCard label="Laba bersih" value={formatRp(s.net_profit)} sub={formatPct(s.net_margin_pct)} tone={s.net_profit >= 0 ? "good" : "bad"} /></div>
         <Section title="Laba Rugi"><DataTable testId="rpt-finance-pl" filename="laporan-keuangan" rows={rows} pageSize={20} columns={[{ key: "label", label: "Pos" }, rp("value", "Nilai")]} /></Section>
         <Section title="Beban per Kategori"><DataTable testId="rpt-finance-exp" filename="beban-kategori" rows={d.expenses_by_category} columns={[{ key: "category", label: "Kategori" }, rp("amount", "Nominal")]} /></Section>
@@ -64,7 +68,7 @@ function Body({ type, range, title }) {
       </>); }
     case "supplier": return <DataTable testId="rpt-suppliers" filename="laporan-supplier" rows={d} columns={[{ key: "code", label: "Kode" }, { key: "name", label: "Supplier" }, { key: "contact_name", label: "Kontak" }, { key: "phone", label: "Telepon" }, { key: "purchase_count", label: "Transaksi", align: "right" }, rp("total", "Total Pembelian"), rp("unpaid", "Hutang"), { key: "last_date", label: "Terakhir", render: (r) => (r.last_date === "-" ? "-" : formatDate(r.last_date)) }]} />;
     case "produk": return <DataTable testId="rpt-products" filename="laporan-produk" rows={d} columns={[{ key: "sku", label: "SKU" }, { key: "name", label: "Produk" }, nm("stock", "Stok"), rpd("avg_hpp", "HPP/Unit"), rp("selling_price", "Harga Jual"), pct("current_margin_pct", "Margin saat ini"), rp("stock_value", "Nilai Stok"), nm("sold_qty", "Terjual"), rp("omzet", "Omzet"), rp("hpp_sold", "HPP Terjual"), rp("profit", "Laba"), pct("margin_pct", "Margin Realisasi")]} />;
-    case "channel": return <DataTable testId="rpt-channels" filename="laporan-channel" rows={d} columns={[{ key: "channel", label: "Channel" }, { key: "count", label: "Transaksi", align: "right" }, nm("qty", "Qty"), rp("omzet", "Omzet"), rp("fees", "Biaya Platform"), rp("net", "Bersih"), rp("hpp", "HPP"), rp("profit", "Laba"), pct("margin_pct", "Margin")]} />;
+    case "channel": return <DataTable testId="rpt-channels" filename="laporan-channel" rows={d} columns={[badged("channel", "Channel"), { key: "count", label: "Transaksi", align: "right" }, nm("qty", "Qty"), rp("omzet", "Omzet"), rp("fees", "Biaya Platform"), rp("net", "Bersih"), rp("hpp", "HPP"), rp("profit", "Laba"), pct("margin_pct", "Margin")]} />;
     case "harga": return <DataTable testId="rpt-prices" filename="histori-harga" rows={d} searchKeys={["material_name", "supplier_name"]} columns={[dt, { key: "material_name", label: "Bahan" }, rp("price", "Harga"), { key: "unit", label: "Satuan" }, { key: "supplier_name", label: "Supplier" }, { key: "source", label: "Sumber" }]} />;
     default: return null;
   }

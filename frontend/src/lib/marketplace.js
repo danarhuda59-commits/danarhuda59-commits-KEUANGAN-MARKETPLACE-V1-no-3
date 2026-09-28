@@ -16,6 +16,8 @@ export const StatusBadge = ({ status }) => <span className={cn("inline-flex item
 const CH_CLS = { Shopee: "bg-orange-500", "TikTok Shop": "bg-slate-900 dark:bg-slate-200 dark:text-slate-900", Tokopedia: "bg-emerald-600", Website: "bg-teal-600" };
 export const ChannelBadge = ({ channel }) => <span className={cn("inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold text-white", CH_CLS[channel] || "bg-slate-500")}>{channel}</span>;
 
+export const SourceBadge = ({ count, className }) => <span className={cn("inline-flex items-center whitespace-nowrap rounded-full border border-orange-300 bg-orange-50 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300", className)} data-testid="source-badge-marketplace" title="Berasal dari order marketplace">Marketplace{count > 1 ? ` ×${count}` : ""}</span>;
+
 export const useMarketplaceMeta = () => useApi("/marketplace/meta");
 export const useProducts = () => useApi("/products");
 export const productOpts = (products) => (products || []).map((p) => ({ value: p.id, label: `${p.name}${p.sku ? ` (${p.sku})` : ""}` }));

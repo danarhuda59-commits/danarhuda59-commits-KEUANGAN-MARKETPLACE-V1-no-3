@@ -8,23 +8,25 @@ import { PageHeader, DataTable, Modal, ConfirmDialog, Field, TextInput, NumberIn
 import { Button } from "../../components/ui/button";
 import { channelOpts, statusOpts, StatusBadge, ChannelBadge, useProducts, productOpts, STATUSES } from "../../lib/marketplace";
 
-const EMPTY = { order_id: "", date: todayISO(), channel: "Shopee", customer: "", product_id: "", qty: 1, normal_price: "", selling_price: "", discount: 0, voucher: 0, shipping_fee: 0, shipping_subsidy: 0, fee_mode: "auto", admin_fee: "", service_fee: "", transaction_fee: "", other_marketplace_fee: "", ad_fee: 0, other_operational_fee: 0, refund: 0, pack_mode: "auto", packaging_cost_per_unit: "", status: "Selesai", notes: "" };
+const EMPTY = { order_id: "", date: todayISO(), channel: "Shopee", customer: "", product_id: "", qty: 1, normal_price: "", selling_price: "", discount: 0, voucher: 0, shipping_fee: 0, shipping_subsidy: 0, fee_mode: "auto", admin_fee: "", service_fee: "", transaction_fee: "", other_marketplace_fee: "", ad_fee: 0, other_operational_fee: 0, refund: 0, refund_qty: 0, pack_mode: "auto", packaging_cost_per_unit: "", status: "Selesai", notes: "" };
 const n = (v) => (v === "" || v === null || v === undefined ? 0 : parseFloat(v) || 0);
 
 export const toPayload = (f) => ({
   ...f, qty: n(f.qty), selling_price: n(f.selling_price), normal_price: f.normal_price === "" ? null : n(f.normal_price), discount: n(f.discount), voucher: n(f.voucher), shipping_fee: n(f.shipping_fee), shipping_subsidy: n(f.shipping_subsidy),
   admin_fee: f.fee_mode === "auto" ? null : n(f.admin_fee), service_fee: f.fee_mode === "auto" ? null : n(f.service_fee), transaction_fee: f.fee_mode === "auto" ? null : n(f.transaction_fee), other_marketplace_fee: f.fee_mode === "auto" ? null : n(f.other_marketplace_fee),
-  ad_fee: n(f.ad_fee), other_operational_fee: n(f.other_operational_fee), refund: n(f.refund), packaging_cost_per_unit: f.pack_mode === "auto" ? null : n(f.packaging_cost_per_unit),
+  ad_fee: n(f.ad_fee), other_operational_fee: n(f.other_operational_fee), refund: n(f.refund), refund_qty: n(f.refund_qty), packaging_cost_per_unit: f.pack_mode === "auto" ? null : n(f.packaging_cost_per_unit),
 });
 
 export function OrderBreakdown({ o, testId = "order-breakdown" }) {
   if (!o) return null;
+  const rq = o.refund_qty || 0;
+  const qtyNet = o.qty_net ?? o.qty;
   return (
     <div className="rounded-lg border bg-muted/30 p-3" data-testid={testId}>
       <SummaryRow label={`Omzet Kotor (${formatRp(o.selling_price)} × ${formatNum(o.qty)})`} value={formatRp(o.gross_revenue)} testId={`${testId}-gross`} />
-      <SummaryRow label="− Diskon − Voucher − Refund" value={formatRp(-(o.discount + o.voucher + o.refund))} />
+      <SummaryRow label={rq > 0 ? `− Diskon − Voucher − Refund (retur ${formatNum(rq)} unit)` : "− Diskon − Voucher − Refund"} value={formatRp(-(o.discount + o.voucher + o.refund))} testId={`${testId}-deductions`} />
       <SummaryRow label="Omzet Bersih" value={formatRp(o.net_revenue)} bold testId={`${testId}-net`} />
-      <SummaryRow label={`− HPP Produk (${formatRp(o.hpp_unit, true)}/unit)`} value={formatRp(-o.hpp_total)} testId={`${testId}-hpp`} />
+      <SummaryRow label={`− HPP Produk (${formatRp(o.hpp_unit, true)}/unit × ${formatNum(qtyNet)}${rq > 0 ? ", barang retur kembali ke stok" : ""})`} value={formatRp(-o.hpp_total)} testId={`${testId}-hpp`} />
       <SummaryRow label={`− Biaya Beban Packaging (${formatRp(o.packaging_cost_per_unit, true)}/unit${o.packaging_name && o.packaging_name !== "manual" ? ` · ${o.packaging_name}` : ""})`} value={formatRp(-o.packaging_cost)} testId={`${testId}-packaging`} />
       <SummaryRow label="Gross Profit" value={formatRp(o.gross_profit)} bold tone={o.gross_profit >= 0 ? "good" : "bad"} testId={`${testId}-gross-profit`} />
       <SummaryRow label={`− Biaya Marketplace (${o.fee_source === "auto" ? "otomatis dari pengaturan" : "manual"})`} value={formatRp(-o.marketplace_fee_total)} testId={`${testId}-fees`} />
@@ -64,7 +66,8 @@ function OrderForm({ form, setForm, products }) {
         <Field label="Harga Jual" required><NumberInput value={form.selling_price} onChange={set("selling_price")} data-testid="order-selling-price" /></Field>
         <Field label="Diskon"><NumberInput value={form.discount} onChange={set("discount")} data-testid="order-discount" /></Field>
         <Field label="Voucher"><NumberInput value={form.voucher} onChange={set("voucher")} data-testid="order-voucher" /></Field>
-        <Field label="Refund / Retur"><NumberInput value={form.refund} onChange={set("refund")} data-testid="order-refund" /></Field>
+        <Field label="Refund / Retur (Rp)" hint="Kosongkan untuk dihitung proporsional dari qty retur"><NumberInput value={form.refund} onChange={set("refund")} data-testid="order-refund" /></Field>
+        <Field label="Qty Retur (refund parsial)"><NumberInput value={form.refund_qty} onChange={set("refund_qty")} data-testid="order-refund-qty" /></Field>
         <Field label="Ongkir (dibayar customer)"><NumberInput value={form.shipping_fee} onChange={set("shipping_fee")} data-testid="order-shipping" /></Field>
         <Field label="Subsidi Ongkir"><NumberInput value={form.shipping_subsidy} onChange={set("shipping_subsidy")} data-testid="order-shipping-subsidy" /></Field>
         <Field label="Status Pesanan" required><SelectInput value={form.status} onChange={set("status")} options={statusOpts} allowEmpty={false} data-testid="order-status" /></Field>
@@ -121,7 +124,7 @@ export default function Orders() {
   const remove = async () => { try { await api.delete(`/marketplace/orders/${del.id}`); toast.success("Order dihapus"); setDel(null); reload(); } catch (e) { toast.error(errMsg(e)); } };
   const columns = [
     { key: "date", label: "Tanggal", render: (r) => formatDate(r.date) }, { key: "order_id", label: "Order ID", className: "font-medium" }, { key: "channel", label: "Channel", render: (r) => <ChannelBadge channel={r.channel} /> },
-    { key: "product_name", label: "Produk" }, { key: "sku", label: "SKU" }, { key: "qty", label: "Qty", align: "right", render: (r) => formatNum(r.qty) }, { key: "customer", label: "Customer" },
+    { key: "product_name", label: "Produk" }, { key: "sku", label: "SKU" }, { key: "qty", label: "Qty", align: "right", render: (r) => <span className="num">{formatNum(r.qty)}{r.refund_qty > 0 && <span className="ml-1 rounded bg-orange-100 px-1 text-[10px] font-semibold text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" title={`Retur ${formatNum(r.refund_qty)} unit`} data-testid={`order-refund-qty-badge-${r.order_id}`}>−{formatNum(r.refund_qty)}</span>}</span>, export: (r) => r.qty }, { key: "customer", label: "Customer" },
     { key: "gross_revenue", label: "Omzet Kotor", align: "right", render: (r) => formatRp(r.gross_revenue) }, { key: "net_revenue", label: "Omzet Bersih", align: "right", render: (r) => formatRp(r.net_revenue) },
     { key: "hpp_total", label: "HPP", align: "right", render: (r) => formatRp(r.hpp_total) }, { key: "packaging_cost", label: "Packaging", align: "right", render: (r) => formatRp(r.packaging_cost) },
     { key: "marketplace_fee_total", label: "Biaya MP", align: "right", render: (r) => formatRp(r.marketplace_fee_total) }, { key: "ad_fee", label: "Iklan", align: "right", render: (r) => formatRp(r.ad_fee) },
@@ -146,7 +149,7 @@ export default function Orders() {
         {form && <OrderForm form={form} setForm={setForm} products={products} />}
       </Modal>
       <Modal open={!!detail} onClose={() => setDetail(null)} title={`Order ${detail?.order_id}`} description={detail ? `${detail.channel} · ${formatDate(detail.date)} · ${detail.product_name} ×${formatNum(detail.qty)} · ${detail.customer || "-"}` : ""}>
-        {detail && <><div className="flex items-center gap-2"><StatusBadge status={detail.status} />{detail.stock_deducted ? <span className="badge-ok">Stok sudah dikurangi</span> : <span className="badge-muted">Stok belum dikurangi</span>}<span className="text-xs text-muted-foreground">sumber: {detail.source}</span></div><OrderBreakdown o={detail} testId="order-detail-breakdown" /></>}
+        {detail && <><div className="flex items-center gap-2"><StatusBadge status={detail.status} />{detail.stock_deducted ? <span className="badge-ok">Stok sudah dikurangi{detail.refund_qty > 0 ? ` (${formatNum(detail.qty_net ?? detail.qty)} unit, retur ${formatNum(detail.refund_qty)})` : ""}</span> : <span className="badge-muted">Stok belum dikurangi</span>}{detail.refund_qty > 0 && <span className="badge-low" data-testid="order-detail-partial-refund">Refund parsial</span>}<span className="text-xs text-muted-foreground">sumber: {detail.source}</span></div><OrderBreakdown o={detail} testId="order-detail-breakdown" /></>}
       </Modal>
       <ConfirmDialog open={!!del} onClose={() => setDel(null)} onConfirm={remove} title={`Hapus order ${del?.order_id}?`} description="Stok yang sudah dikurangi akan dikembalikan." />
     </div>

@@ -283,17 +283,19 @@ class OrderIn(BaseModel):
     ad_fee: float = 0
     other_operational_fee: float = 0
     refund: float = 0
+    refund_qty: float = 0
     packaging_cost_per_unit: Optional[float] = None
     status: str = "Pending"
     notes: Optional[str] = ""
     source: str = "manual"
 
 
-def calc_order(gross_unit, qty, discount, voucher, refund, hpp_unit, pack_unit, fees, ad_fee, other_op, shipping_fee):
-    """Rumus spesifikasi C. Semua komponen terpisah, tidak ada yang dihitung dua kali."""
+def calc_order(gross_unit, qty, discount, voucher, refund, hpp_unit, pack_unit, fees, ad_fee, other_op, shipping_fee, refund_qty=0.0):
+    """Rumus spesifikasi C. Semua komponen terpisah, tidak ada yang dihitung dua kali. Refund parsial: barang yang kembali (refund_qty) tidak dibebankan HPP; packaging tetap penuh."""
+    qty_net = max(qty - refund_qty, 0.0)
     gross = gross_unit * qty
     net = gross - discount - voucher - refund
-    hpp = hpp_unit * qty
+    hpp = hpp_unit * qty_net
     packaging = pack_unit * qty
     total_cost = hpp + packaging
     gross_profit = net - hpp - packaging
@@ -303,7 +305,7 @@ def calc_order(gross_unit, qty, discount, voucher, refund, hpp_unit, pack_unit, 
     return {
         "gross_revenue": R(gross), "net_revenue": R(net), "hpp_unit": round(hpp_unit, 4), "hpp_total": R(hpp), "packaging_cost_per_unit": round(pack_unit, 4), "packaging_cost": R(packaging),
         "total_cost": R(total_cost), "gross_profit": R(gross_profit), "marketplace_fee_total": R(mp_fees), "net_profit": R(net_profit), "margin_pct": round(margin, 2),
-        "customer_paid": R(gross - discount - voucher + shipping_fee), "seller_received": R(net - mp_fees - ad_fee),
+        "customer_paid": R(gross - discount - voucher + shipping_fee), "seller_received": R(net - mp_fees - ad_fee), "refund_qty": refund_qty, "qty_net": qty_net,
     }
 
 
@@ -319,6 +321,11 @@ async def build_order(bid, body: OrderIn, user, oid, existing=None):
     qty = num(body.qty, "Qty", 0, allow_equal=False)
     price = num(body.selling_price, "Harga jual")
     discount, voucher, refund = num(body.discount, "Diskon"), num(body.voucher, "Voucher"), num(body.refund, "Refund")
+    refund_qty = num(body.refund_qty, "Qty refund/retur")
+    if refund_qty > qty + 1e-9:
+        raise HTTPException(400, f"Qty refund/retur ({refund_qty:g}) tidak boleh melebihi qty order ({qty:g})")
+    if refund_qty > 0 and refund <= 0 and body.status not in REFUND_STATUSES:
+        refund = max((price * qty - discount - voucher) * refund_qty / qty, 0)
     ad_fee, other_op = num(body.ad_fee, "Biaya iklan"), num(body.other_operational_fee, "Biaya operasional lain")
     ship, subsidy = num(body.shipping_fee, "Ongkir"), num(body.shipping_subsidy, "Subsidi ongkir")
     date = body.date or today_str()
@@ -337,7 +344,7 @@ async def build_order(bid, body: OrderIn, user, oid, existing=None):
     else:
         pack_unit, pack_name = await product_packaging_cost(bid, product)
     hpp_unit = float(existing["hpp_unit"]) if existing and existing.get("stock_deducted") else float(product.get("avg_hpp") or 0)
-    calc = calc_order(price, qty, discount, voucher, refund, hpp_unit, pack_unit, fees, ad_fee, other_op, ship)
+    calc = calc_order(price, qty, discount, voucher, refund, hpp_unit, pack_unit, fees, ad_fee, other_op, ship, refund_qty)
     return {
         "id": oid, "business_id": bid, "order_id": body.order_id.strip(), "date": date, "channel": body.channel, "customer": body.customer or "",
         "product_id": product["id"], "product_name": product["name"], "sku": product.get("sku") or "", "unit": product.get("unit"), "qty": qty,
@@ -351,11 +358,13 @@ async def build_order(bid, body: OrderIn, user, oid, existing=None):
 
 
 async def sync_stock(bid, doc, user):
-    """Satu titik pengurangan stok: dikurangi sekali saat status masuk Diproses/Dikirim/Selesai, dikembalikan saat keluar dari status itu."""
+    """Satu titik pengurangan stok: dikurangi sekali (qty − refund_qty) saat status masuk Diproses/Dikirim/Selesai, dikembalikan saat keluar dari status itu."""
     should = doc["status"] in STOCK_STATUSES
     if should and not doc["stock_deducted"]:
+        eff = float(doc.get("qty_net", doc["qty"]))
         try:
-            await post_inventory(bid, "product", doc["product_id"], -doc["qty"], "sale", doc["hpp_unit"], "sales_order", doc["id"], f"Order {doc['channel']} {doc['order_id']}", doc["date"], user=user)
+            if eff > 0:
+                await post_inventory(bid, "product", doc["product_id"], -eff, "sale", doc["hpp_unit"], "sales_order", doc["id"], f"Order {doc['channel']} {doc['order_id']}" + (f" (retur {doc['refund_qty']:g})" if doc.get("refund_qty") else ""), doc["date"], user=user)
             doc["stock_deducted"], doc["stock_warning"] = True, None
         except HTTPException as e:
             doc["stock_warning"] = e.detail
@@ -409,7 +418,7 @@ async def update_order(oid: str, body: OrderIn, user=Depends(current_user)):
     doc = await build_order(bid, body, user, oid, old)
     if await find_duplicate(bid, doc["order_id"], doc["sku"], oid):
         raise HTTPException(400, "Order ID + SKU sudah dipakai order lain")
-    if old["stock_deducted"] and (old["product_id"] != doc["product_id"] or abs(old["qty"] - doc["qty"]) > 1e-9):
+    if old["stock_deducted"] and (old["product_id"] != doc["product_id"] or abs(float(old.get("qty_net", old["qty"])) - doc["qty_net"]) > 1e-9):
         await reverse_ref(bid, "sales_order", oid, user)
         doc["stock_deducted"] = False
     doc = await sync_stock(bid, doc, user)
@@ -457,7 +466,7 @@ ORDER_FIELDS = [
     ("order_id", "Order ID", True), ("date", "Tanggal", False), ("sku", "SKU", False), ("product_name", "Nama Produk", False), ("qty", "Qty", True),
     ("selling_price", "Harga Jual", True), ("normal_price", "Harga Normal", False), ("discount", "Diskon", False), ("voucher", "Voucher", False),
     ("shipping_fee", "Ongkir", False), ("shipping_subsidy", "Subsidi Ongkir", False), ("admin_fee", "Biaya Admin", False), ("service_fee", "Biaya Layanan", False),
-    ("transaction_fee", "Biaya Transaksi", False), ("other_marketplace_fee", "Biaya Marketplace Lain", False), ("ad_fee", "Biaya Iklan", False), ("refund", "Refund", False),
+    ("transaction_fee", "Biaya Transaksi", False), ("other_marketplace_fee", "Biaya Marketplace Lain", False), ("ad_fee", "Biaya Iklan", False), ("refund", "Refund", False), ("refund_qty", "Qty Refund/Retur", False),
     ("customer", "Customer", False), ("status", "Status", False), ("notes", "Keterangan", False),
 ]
 ALIASES = {
@@ -478,6 +487,7 @@ ALIASES = {
     "other_marketplace_fee": ["biaya lainnya", "other fee", "biaya marketplace lain"],
     "ad_fee": ["biaya iklan", "ads", "advertising fee", "iklan"],
     "refund": ["refund", "pengembalian dana", "total refund", "returned amount", "jumlah pengembalian"],
+    "refund_qty": ["qty refund", "qty retur", "jumlah retur", "jumlah dikembalikan", "returned quantity", "return qty", "qty dikembalikan"],
     "customer": ["username (pembeli)", "nama penerima", "pembeli", "customer", "buyer username", "recipient", "nama pembeli"],
     "status": ["status pesanan", "status", "order status"],
     "notes": ["catatan", "keterangan", "notes", "pesan dari pembeli"],
@@ -572,7 +582,7 @@ async def import_validate(body: ImportValidateIn, user=Depends(current_user)):
         data["order_id"] = g("order_id")
         if not data["order_id"]:
             errors.append({"field": "order_id", "value": "", "reason": "Order ID kosong"})
-        for f in ("qty", "selling_price", "normal_price", "discount", "voucher", "shipping_fee", "shipping_subsidy", "admin_fee", "service_fee", "transaction_fee", "other_marketplace_fee", "ad_fee", "refund"):
+        for f in ("qty", "selling_price", "normal_price", "discount", "voucher", "shipping_fee", "shipping_subsidy", "admin_fee", "service_fee", "transaction_fee", "other_marketplace_fee", "ad_fee", "refund", "refund_qty"):
             v = g(f) if body.mapping.get(f) else ""
             try:
                 data[f] = parse_number(v) if v else (None if f in ("normal_price", *FEE_FIELDS) else 0.0)
@@ -630,7 +640,7 @@ async def import_commit(body: ImportCommitIn, user=Depends(current_user)):
             payload = OrderIn(order_id=d["order_id"], date=d.get("date"), channel=body.channel, customer=d.get("customer") or "", product_id=d["product_id"], qty=d["qty"], normal_price=d.get("normal_price"),
                               selling_price=d["selling_price"], discount=d.get("discount") or 0, voucher=d.get("voucher") or 0, shipping_fee=d.get("shipping_fee") or 0, shipping_subsidy=d.get("shipping_subsidy") or 0,
                               admin_fee=d.get("admin_fee"), service_fee=d.get("service_fee"), transaction_fee=d.get("transaction_fee"), other_marketplace_fee=d.get("other_marketplace_fee"),
-                              ad_fee=d.get("ad_fee") or 0, refund=d.get("refund") or 0, status=d.get("status") or "Selesai", notes=d.get("notes") or "", source=f"import:{body.channel}")
+                              ad_fee=d.get("ad_fee") or 0, refund=d.get("refund") or 0, refund_qty=d.get("refund_qty") or 0, status=d.get("status") or "Selesai", notes=d.get("notes") or "", source=f"import:{body.channel}")
             doc = await build_order(bid, payload, user, new_id())
             doc = await sync_stock(bid, doc, user)
             await db.sales_orders.insert_one(dict(doc))
@@ -796,7 +806,9 @@ def summarize(orders):
     s = {k: R(sum(o[k] for o in active)) for k in ("gross_revenue", "net_revenue", "hpp_total", "packaging_cost", "marketplace_fee_total", "ad_fee", "other_operational_fee", "refund", "gross_profit", "net_profit", "discount", "voucher")}
     s["order_count"] = len({o["order_id"] for o in active})
     s["line_count"] = len(active)
-    s["qty_sold"] = R(sum(o["qty"] for o in active))
+    s["qty_sold"] = R(sum(o.get("qty_net", o["qty"]) for o in active))
+    s["refund_qty"] = R(sum(o.get("refund_qty") or 0 for o in active))
+    s["partial_refund_count"] = sum(1 for o in active if (o.get("refund_qty") or 0) > 0 and o["status"] not in REFUND_STATUSES)
     s["aov"] = R(safe_div(s["net_revenue"], s["order_count"]))
     s["margin_pct"] = round(safe_div(s["net_profit"], s["net_revenue"]) * 100 if s["net_revenue"] > 0 else 0.0, 2)
     s["cancelled_count"] = sum(1 for o in orders if o["status"] == "Dibatalkan")

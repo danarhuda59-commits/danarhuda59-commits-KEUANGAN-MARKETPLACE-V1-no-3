@@ -125,9 +125,10 @@ def order_as_sale(o):
     pf, sf, of = float(o.get("marketplace_fee_total") or 0), float(o.get("ad_fee") or 0), float(o.get("other_operational_fee") or 0)
     total = float(o.get("net_revenue") or 0)
     net = total - pf - sf - of
-    return {"id": o["id"], "number": o.get("order_id"), "date": o["date"], "channel": o["channel"], "source": "marketplace", "status": o.get("status"),
-            "total": round(total, 2), "platform_fee": pf, "service_fee": sf, "other_fee": of, "net_total": round(net, 2), "total_hpp": round(hpp, 2), "profit": round(net - hpp, 2), "qty_total": float(o.get("qty") or 0),
-            "items": [{"product_id": o["product_id"], "product_name": o["product_name"], "sku": o.get("sku"), "qty": float(o.get("qty") or 0), "price": o.get("selling_price"), "subtotal": round(total, 2), "hpp_total": round(hpp, 2), "profit": round(total - hpp, 2)}]}
+    qty = float(o.get("qty_net", o.get("qty")) or 0)
+    return {"id": o["id"], "number": o.get("order_id"), "date": o["date"], "channel": o["channel"], "source": "marketplace", "status": o.get("status"), "refund_qty": float(o.get("refund_qty") or 0),
+            "total": round(total, 2), "platform_fee": pf, "service_fee": sf, "other_fee": of, "net_total": round(net, 2), "total_hpp": round(hpp, 2), "profit": round(net - hpp, 2), "qty_total": qty,
+            "items": [{"product_id": o["product_id"], "product_name": o["product_name"], "sku": o.get("sku"), "qty": qty, "price": o.get("selling_price"), "subtotal": round(total, 2), "hpp_total": round(hpp, 2), "profit": round(total - hpp, 2), "source": "marketplace"}]}
 
 
 async def marketplace_included(bid):
@@ -164,7 +165,7 @@ def pl_summary(sales, expenses):
 
 
 def per_product(sales):
-    agg = defaultdict(lambda: {"qty": 0.0, "omzet": 0.0, "hpp": 0.0})
+    agg = defaultdict(lambda: {"qty": 0.0, "omzet": 0.0, "hpp": 0.0, "marketplace_count": 0})
     names = {}
     for s in sales:
         for it in s["items"]:
@@ -172,17 +173,18 @@ def per_product(sales):
             a["qty"] += it["qty"]
             a["omzet"] += it["subtotal"]
             a["hpp"] += it["hpp_total"]
+            a["marketplace_count"] += 1 if s.get("source") == "marketplace" else 0
             names[it["product_id"]] = (it["product_name"], it.get("sku"))
     out = []
     for pid, a in agg.items():
         profit = a["omzet"] - a["hpp"]
-        out.append({"product_id": pid, "product_name": names[pid][0], "sku": names[pid][1], "qty": a["qty"], "omzet": round(a["omzet"], 2), "hpp": round(a["hpp"], 2), "profit": round(profit, 2),
+        out.append({"product_id": pid, "product_name": names[pid][0], "sku": names[pid][1], "qty": a["qty"], "omzet": round(a["omzet"], 2), "hpp": round(a["hpp"], 2), "profit": round(profit, 2), "marketplace_count": a["marketplace_count"],
                     "margin_pct": round(safe_div(profit, a["omzet"]) * 100, 2), "avg_price": round(safe_div(a["omzet"], a["qty"]), 2), "hpp_per_unit": round(safe_div(a["hpp"], a["qty"]), 2)})
     return sorted(out, key=lambda x: -x["omzet"])
 
 
 def per_channel(sales):
-    agg = defaultdict(lambda: {"count": 0, "qty": 0.0, "omzet": 0.0, "fees": 0.0, "net": 0.0, "hpp": 0.0})
+    agg = defaultdict(lambda: {"count": 0, "qty": 0.0, "omzet": 0.0, "fees": 0.0, "net": 0.0, "hpp": 0.0, "marketplace_count": 0})
     for s in sales:
         a = agg[s["channel"]]
         a["count"] += 1
@@ -191,6 +193,7 @@ def per_channel(sales):
         a["fees"] += s["platform_fee"] + s["service_fee"] + s["other_fee"]
         a["net"] += s["net_total"]
         a["hpp"] += s["total_hpp"]
+        a["marketplace_count"] += 1 if s.get("source") == "marketplace" else 0
     return [{"channel": c, **{k: round(v, 2) for k, v in a.items()}, "profit": round(a["net"] - a["hpp"], 2), "margin_pct": round(safe_div(a["net"] - a["hpp"], a["net"]) * 100, 2)} for c, a in agg.items()]
 
 
