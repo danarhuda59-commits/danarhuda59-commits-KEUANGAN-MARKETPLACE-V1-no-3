@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 8: verified partial refund per marketplace order line + include_marketplace_in_pl toggle. Backend pytest: 10/10 passed on public URL (create/update refund_qty, stock net deductions, Dibatalkan restore, 400 for refund_qty>qty, dashboard qty_sold/refund_qty/partial_refund_count, PL toggle with marketplace_included/summary/marketplace_count and sales.source='marketplace', import validate+commit with refund_qty, regression on other marketplace endpoints). Frontend: verified pl-marketplace-switch on /laba-rugi toggles marketplace inclusion (5 badges when on, 0 when off), source-badge-marketplace visible on /laba-rugi (5) and /laporan/penjualan (9); rpt-finance-mp-note present on /laporan/keuangan; on /marketplace/order the order-refund-qty-badge appears on rows (4 badges), order-detail-btn opens modal where order-detail-partial-refund badge shows; order-refund-qty input present inside Order Manual modal (opened via order-add-btn).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8_partial_refund.py",
+    "/app/test_reports/pytest/iteration8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "marketplace.py summarize(): partial_refund_count excludes REFUND_STATUSES rows — intended per spec, but a fully-refunded order via refund_qty==qty (still Selesai) would count as partial refund. Consider clarifying semantics.",
+    "build_order() auto-refund formula uses (price*qty - discount - voucher) * refund_qty/qty; if voucher/discount already refunded elsewhere this could double-count. Verified spec-compliant per problem statement.",
+    "Orders.jsx order-refund-qty input is inside the Order Manual modal — data-testid only becomes queryable after clicking order-add-btn; documented for future testing agents."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration8_partial_refund.py",
+    "/app/test_reports/iteration_8.json"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (all data-testids present and working)"},
+  "test_credentials": "admin@keuangan.com / Admin12345!",
+  "seed_data_creation": "Created TEST_IT8_Material (initial stock 50000g @10k/kg), TEST_IT8_Product (SKU TEST-IT8-SKU), TEST_IT8_Recipe, one production of 20 pcs. Test marketplace orders: TEST_IT8_ORD_A (status Dibatalkan), TEST_IT8_DASH (Selesai, refund_qty 2), TEST_IT8_IMP_COMMIT (imported, refund_qty 1), TEST_IT8_REG (no refund). Business toggle include_marketplace_in_pl restored to True (its state before test run).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend production endpoint is /api/production (singular); previous iteration attempted /api/productions and got 404. Business toggle currently True. TEST_IT8_ prefixed data remains for inspection. To trigger the Order Manual form (order-refund-qty), click order-add-btn on /marketplace/order first.",
+  "rca of the issue": "N/A — all iteration-8 features working as specified."
+}
