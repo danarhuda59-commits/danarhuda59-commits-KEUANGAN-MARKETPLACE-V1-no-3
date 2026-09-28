@@ -14,6 +14,12 @@ Import repo `danarhuda59-commits/Keuangan-V1` (branch `main`) ke workspace baru,
 ## Persona
 Pemilik/operator UMKM F&B: HPP dari bahan & resep, pembelian/produksi/penjualan, laporan; menjual via Shopee/TikTok/Tokopedia/Website.
 
+## Re-import ke workspace ini (Juni 2026, repo KEUANGAN-MARKETPLACE-V1-no-2 @ main)
+- [x] Clone → rsync ke `/app` (tanpa mengubah kode fitur), `pip install -r requirements.txt`, `yarn install` (yarn.lock dibuat)
+- [x] `backend/.env`: tambah `JWT_SECRET`, `ADMIN_EMAIL=admin@keuangan.com`, `ADMIN_PASSWORD` (lihat `memory/test_credentials.md`); admin ter-seed saat startup
+- [x] Verifikasi: `/api/health` ok, login UI → dashboard, 16 unit test HPP lulus, testing agent iterasi 7: 22/22 backend + 5 halaman frontend lulus (auth, master, HPP, pembelian/produksi/penjualan, finance, marketplace penuh)
+- [ ] S3 upload tidak dikonfigurasi (opsional) → `POST /upload` 503
+
 ## Yang sudah dikerjakan (Juni 2026 — re-import)
 - [x] Marketplace & Packaging (iterasi 6): router `backend/routers/marketplace.py` (prefix `/api/marketplace`) — fees (sales_fees), packaging_items + packaging_costs + `products.packaging_cost_id`, sales_orders (rumus C, status, stok satu titik via `stock_deducted`), import CSV/XLSX (preview→validate→commit, dedup order_id+sku, marketplace_imports), marketplace_settlements (+kas masuk), reconciliation, dashboard, reports/{10 tipe}. Frontend `src/pages/marketplace/*` + nav group "Marketplace". Smoke: `backend/tests/smoke_marketplace.py` + testing agent iterasi 6 lulus.
 - [x] Keputusan desain: order marketplace TIDAK ikut ke koleksi `sales`/Laba Rugi lama (menghindari double counting) — profit marketplace dilihat di Dashboard/Laporan Marketplace; payout masuk kas via settlement. HPP order = `products.avg_hpp` saat order (snapshot).
